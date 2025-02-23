@@ -58,7 +58,68 @@ df = pd.DataFrame(data)
 print(df)
 
 # Строим матрицу корреляций
-selected_cols = [0, 1*121, 2*121,24*121]  
+
+
+
+
+# df_selected = df.iloc[:, 0:121]
+# # Преобразуем DataFrame в длинный формат (чтобы Seaborn понял)
+# df_selected_long = df_selected.reset_index().melt(id_vars="index", var_name="Column", value_name="Value")
+
+# # Строим график с Seaborn
+# plt.figure(figsize=(10, 6))
+# sns.lineplot(data=df_selected_long, x="Column", y="Value", hue="index")
+
+# plt.title("Графики строк DataFrame (Seaborn, столбцы 0-120)")
+# plt.xlabel("Столбцы")
+# plt.ylabel("Значения")
+# plt.legend(title="Строки")
+# plt.show()
+
+
+
+# df_selected = df.iloc[:, 1*121:2*121+1]
+# # Преобразуем DataFrame в длинный формат (чтобы Seaborn понял)
+# df_selected_long = df_selected.reset_index().melt(id_vars="index", var_name="Column", value_name="Value")
+
+# # Строим график с Seaborn
+# plt.figure(figsize=(10, 6))
+# sns.lineplot(data=df_selected_long, x="Column", y="Value", hue="index")
+
+# plt.title("Графики строк DataFrame (Seaborn, столбцы 0-120)")
+# plt.xlabel("Столбцы")
+# plt.ylabel("Значения")
+# plt.legend(title="Строки")
+# plt.show()
+
+segment_size = 121
+num_segments = 25  # 3025 // 121 = 25
+
+for i in range(num_segments):
+    start = i * segment_size
+    end = start + segment_size
+    df_segment = df.iloc[:, start:end]
+
+    # Преобразуем DataFrame в длинный формат для Seaborn
+    df_long = df_segment.reset_index().melt(id_vars="index", var_name="Column", value_name="Value")
+
+    # Создаем новый рисунок для каждого участка
+    plt.figure(figsize=(10, 5))
+    sns.lineplot(data=df_long, x="Column", y="Value", hue="index")
+
+    # Подписи графика
+    plt.title(f"График {i+1} (столбцы {start}-{end-1})")
+    plt.xlabel("Столбцы")
+    plt.ylabel("Значения")
+    plt.legend(title="Строки")
+    
+    # Отображаем график
+    plt.show(block=False)
+
+
+
+
+selected_cols = [i*121 for i in range(25)]  
 corr_matrix = df[selected_cols].corr()
 
 
@@ -66,20 +127,4 @@ corr_matrix = df[selected_cols].corr()
 plt.figure(figsize=(6, 4))
 sns.heatmap(corr_matrix, annot=True, cmap="coolwarm", fmt=".2f")
 plt.title("Матрица корреляций")
-plt.show()
-
-
-
-df_selected = df.iloc[:, 0:121]
-# Преобразуем DataFrame в длинный формат (чтобы Seaborn понял)
-df_selected_long = df_selected.reset_index().melt(id_vars="index", var_name="Column", value_name="Value")
-
-# Строим график с Seaborn
-plt.figure(figsize=(10, 6))
-sns.lineplot(data=df_selected_long, x="Column", y="Value", hue="index")
-
-plt.title("Графики строк DataFrame (Seaborn, столбцы 0-120)")
-plt.xlabel("Столбцы")
-plt.ylabel("Значения")
-plt.legend(title="Строки")
 plt.show()
