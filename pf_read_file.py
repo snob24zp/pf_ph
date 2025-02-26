@@ -92,8 +92,8 @@ print(df)
 # plt.legend(title="Строки")
 # plt.show()
 
-segment_size = 121
-num_segments = 25  # 3025 // 121 = 25
+segment_size = 121*25
+num_segments = int(3025/segment_size)  # 3025 // 121 = 25
 
 for i in range(num_segments):
     start = i * segment_size
