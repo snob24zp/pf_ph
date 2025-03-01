@@ -107,12 +107,45 @@ def data_corr(df):
  #folder_path = "./p"
 
 def view_data(mydata_path):
-    df_p =read_result(mydata_path)
-    data_graf(df_p)
-    data_corr(df_p)
+    df =read_result(mydata_path)
+    #data_graf(df)
+    #data_corr(df)
+    return df
 
-view_data("./p")
+df_p=view_data("./p")
 
-view_data("./n")
+df_n=view_data("./n")
 
-plt.show()
+
+def data_graf2(df1,df2):
+    segment_size = 121*25
+    num_segments = int(3025/segment_size)  # 3025 // 121 = 25
+
+    for i in range(num_segments):
+        start = i * segment_size
+        end = start + segment_size
+        df1_segment = df1.iloc[:, start:end]
+        df2_segment = df2.iloc[:, start:end]
+
+    # Преобразуем DataFrame в длинный формат для Seaborn
+        df1_long = df1_segment.reset_index().melt(id_vars="index", var_name="Column", value_name="Value")
+        df2_long = df2_segment.reset_index().melt(id_vars="index", var_name="Column", value_name="Value")
+
+
+    # Создаем новый рисунок для каждого участка
+        plt.figure(figsize=(10, 5))
+        sns.lineplot(data=df1_long, x="Column", y="Value" , hue="index",palette="Blues")
+        sns.lineplot(data=df2_long, x="Column", y="Value", hue="index",palette="Reds")
+
+    # Подписи графика
+        plt.title(f"График {i+1} (столбцы {start}-{end-1})")
+        plt.xlabel("Столбцы")
+        plt.ylabel("Значения")
+        plt.legend(title="Строки")
+    
+    # Отображаем график
+        plt.show()
+
+data_graf2(df_p,df_n)
+
+#plt.show()
