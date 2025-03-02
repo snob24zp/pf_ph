@@ -9,6 +9,7 @@ from sklearn.discriminant_analysis import QuadraticDiscriminantAnalysis
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
 from sklearn.decomposition import PCA
+from scipy.stats import entropy
 
 
 
@@ -215,7 +216,10 @@ X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_
 
 corr_matrix = X_train.corr().abs()  # Вычисляем корреляцию по модулю
 upper_tri = corr_matrix.where(np.triu(np.ones(corr_matrix.shape), k=1).astype(bool))
-to_drop = [col for col in upper_tri.columns if any(upper_tri[col] > 0.95)]
+to_drop = [col for col in upper_tri.columns if any(upper_tri[col] > 0.90)]
+
+print(f'to_drop: {to_drop}')
+
 
 X_train = X_train.drop(columns=to_drop)
 X_test = X_test.drop(columns=to_drop)
@@ -235,6 +239,19 @@ qda.fit(X_train, y_train)
 # 5. Предсказание и оценка точности
 y_pred = qda.predict(X_test)
 accuracy = accuracy_score(y_test, y_pred)
+
+qda_probs = qda.predict_proba(X_test)
+#print(f'qda_probs: {qda_probs:.2f}')
+print('qda_probs')
+print(qda_probs)
+confidence_scores = np.max(qda_probs, axis=1) 
+print('confidence_scores')
+print(confidence_scores)
+
+uncertainty_scores = entropy(qda_probs.T)
+print('uncertainty_scores')
+print(uncertainty_scores)
+
 
 print(f'Accuracy: {accuracy:.2f}')
 
