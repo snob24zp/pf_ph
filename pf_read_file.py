@@ -5,6 +5,11 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 
+from sklearn.discriminant_analysis import QuadraticDiscriminantAnalysis
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score
+from sklearn.decomposition import PCA
+
 
 
 def read_result(mydata_path):
@@ -146,6 +151,90 @@ def data_graf2(df1,df2):
     # Отображаем график
         plt.show()
 
-data_graf2(df_p,df_n)
+#data_graf2(df_p,df_n)
 
-#plt.show()
+df_p1=df_p.copy()
+df_n1=df_n.copy()
+
+df_p1["dataset"]="1"
+df_n1["dataset"]="0"
+
+#print(df_p)
+#print(df_n)
+
+df_combined = pd.concat([df_p1, df_n1])
+
+print(df_combined)
+
+# df_combined = pd.concat([df_p, df_n])
+
+# segment_size = 121*25
+# num_segments = int(3025/segment_size)  # 3025 // 121 = 25
+
+# start = 0
+# end = start + segment_size
+# df_segment = df_combined.iloc[:, start:end]
+
+
+#     # Преобразуем DataFrame в длинный формат для Seaborn
+# df_long = df_segment.reset_index().melt(id_vars="index", var_name="Column", value_name="Value")
+
+# print(df_long)
+
+# Создаем палитру с красными и синими тонами
+palette = {0: "red", 1: "blue"}
+
+# Строим график
+df_c_long = df_combined.reset_index().melt(id_vars=["index","dataset"], var_name="Column", value_name="Value")
+#df_n_long = df_n.reset_index().melt(id_vars="index", var_name="Column", value_name="Value")
+sns.lineplot(data=df_c_long, x="Column", y="Value",hue='dataset',units="index",
+    estimator=None)
+#sns.lineplot(data=df_n_long, x="Column", y="Value")
+
+
+
+#     # Подписи графика
+# plt.title(f"График {i+1} (столбцы {start}-{end-1})")
+# plt.xlabel("Столбцы")
+# plt.ylabel("Значения")
+# plt.legend(title="Строки")
+    
+#     # Отображаем график
+plt.show(block=False)
+# #plt.show()
+
+#----------------------------QDA--QDA--QDA--QDA--QDA--QDA--------------------------
+print('QDA')
+
+X = df_combined.drop(columns=['dataset'])  # Признаки
+y = df_combined['dataset']
+
+# 3. Разделение на обучающую и тестовую выборки
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=4)
+
+
+corr_matrix = X_train.corr().abs()  # Вычисляем корреляцию по модулю
+upper_tri = corr_matrix.where(np.triu(np.ones(corr_matrix.shape), k=1).astype(bool))
+to_drop = [col for col in upper_tri.columns if any(upper_tri[col] > 0.95)]
+
+X_train = X_train.drop(columns=to_drop)
+X_test = X_test.drop(columns=to_drop)
+
+print(X_train.shape)
+# ==== 3. Применяем PCA ====
+# n_components = 80  # Можно варьировать 100-500
+# pca = PCA(n_components=n_components)
+
+# X_train_pca = pca.fit_transform(X_train)  # Обучаем PCA на train
+# X_test_pca = pca.transform(X_test)  # Применяем к test
+
+# ==== 4. Обучаем QDA ====
+qda = QuadraticDiscriminantAnalysis(reg_param=0.1)
+qda.fit(X_train, y_train)
+
+# 5. Предсказание и оценка точности
+y_pred = qda.predict(X_test)
+accuracy = accuracy_score(y_test, y_pred)
+
+print(f'Accuracy: {accuracy:.2f}')
+
