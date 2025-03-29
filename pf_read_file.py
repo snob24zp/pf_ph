@@ -13,6 +13,10 @@ from scipy.stats import entropy
 
 
 class Qda:
+    def __init__(self):
+        self.to_drop = []  # Инициализация параметра класса to_drop
+        self.qda = None  # Инициализация параметра класса qda
+
     def read_result(self,mydata_path):
     # Получаем список всех файлов в папке
         files = os.listdir(mydata_path)
@@ -64,7 +68,7 @@ class Qda:
 
         print(df)
 
-        return df
+        return df, files
 
 
 
@@ -110,7 +114,7 @@ class Qda:
     #folder_path = "./p"
 
     def view_data(self,mydata_path):
-        df =self.read_result(mydata_path)
+        df,_ =self.read_result(mydata_path)
         self.data_graf(df)
         self.data_corr(df)
         return df
@@ -218,13 +222,13 @@ class Qda:
 
         corr_matrix = X_train.corr().abs()  # Вычисляем корреляцию по модулю
         upper_tri = corr_matrix.where(np.triu(np.ones(corr_matrix.shape), k=1).astype(bool))
-        to_drop = [col for col in upper_tri.columns if any(upper_tri[col] > 0.90)]
+        self.to_drop = [col for col in upper_tri.columns if any(upper_tri[col] > 0.90)]
 
-        print(f'to_drop: {to_drop}')
+        print(f'to_drop: {self.to_drop}')
 
 
-        X_train = X_train.drop(columns=to_drop)
-        X_test = X_test.drop(columns=to_drop)
+        X_train = X_train.drop(columns=self.to_drop)
+        X_test = X_test.drop(columns=self.to_drop)
 
         print(X_train.shape)
         # ==== 3. Применяем PCA ====
@@ -235,14 +239,14 @@ class Qda:
         # X_test_pca = pca.transform(X_test)  # Применяем к test
 
         # ==== 4. Обучаем QDA ====
-        qda = QuadraticDiscriminantAnalysis(reg_param=0.1)
-        qda.fit(X_train, y_train)
+        self.qda = QuadraticDiscriminantAnalysis(reg_param=0.1)
+        self.qda.fit(X_train, y_train)
 
         # 5. Предсказание и оценка точности
-        y_pred = qda.predict(X_test)
+        y_pred = self.qda.predict(X_test)
         accuracy = accuracy_score(y_test, y_pred)
 
-        qda_probs = qda.predict_proba(X_test)
+        qda_probs = self.qda.predict_proba(X_test)
         #print(f'qda_probs: {qda_probs:.2f}')
         print('qda_probs')
         print(qda_probs)
@@ -256,7 +260,7 @@ class Qda:
 
 
         print(f'Accuracy: {accuracy:.2f}')
-        return qda, to_drop
+        return self.qda
 
     def QDAfit(self,folder_path):
 
@@ -287,17 +291,44 @@ class Qda:
         y = df_combined['dataset']
 
 
-        X_train = X_train.drop(columns=to_drop)
-        X_test = X_test.drop(columns=to_drop)
+        X_train = X_train.drop(columns=self.to_drop)
+        X_test = X_test.drop(columns=self.to_drop)
 
         print(X_train.shape)
 
         qda.fit(X_train, y_train)
 
+    def classify_files(self, folder_path ):
+        """
+        Классифицирует файлы в заданном каталоге на основе обученной модели QDA.
 
-qda=Qda()
+        Args:
+        folder_path (str): Путь к каталогу с файлами для анализа.
+        qda_model (QuadraticDiscriminantAnalysis): Обученная модель QDA.
+        to_drop (list): Список признаков, которые нужно исключить из данных.
+
+        Returns:
+        dict: Словарь, где ключ — имя файла, значение — признак ('P' или 'N').
+        """
+
+
+            # Читаем данные из файлаfile_pa
+        df,files = self.read_result(folder_path)
+
+            # Удаляем ненужные признаки
+        df = df.drop(columns=self.to_drop, errors='ignore')
+
+            # Прогнозируем метку с помощью модели QDA
+        predictions = self.qda.predict(df)
+           #majority_class = 'P' if predictions.mean() > 0.5 else 'N'
+            # Сохраняем результат в словарь
+        classification_results = {file: prediction for file, prediction in zip(files, predictions)}
+      
+        return classification_results
+
 
 if __name__=='__main__':
+    qda=Qda()
     folder_pass_path = "./p"
     folder_fail_path = "./n"
     qda.QDAanalysis(folder_pass_path,folder_fail_path)
