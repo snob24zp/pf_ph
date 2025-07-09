@@ -10,7 +10,11 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
 from sklearn.decomposition import PCA
 from scipy.stats import entropy
+
 import plotly.express as px
+import plotly.graph_objects as go
+from plotly.colors import sample_colorscale
+import plotly.colors as pc
 
 import webbrowser
 
@@ -111,30 +115,30 @@ class DataRead:
             data_array = np.array(data_1)
 
             # Выводим первые 5 строк массива для проверки
-            print(data_array[:])
-            print(data_array.shape)
+            #print(data_array[:])
+            #print(data_array.shape)
 
             data_array_1 = data_array.flatten('F')[self.data_points:]
 
-            print(data_array_1[:])
-            print(data_array_1.shape)
+            #print(data_array_1[:])
+            #print(data_array_1.shape)
             
             if  self.data is None:
                 self.data = np.copy(data_array_1)
             else:
                 self.data = np.vstack((self.data, data_array_1))
 
-        print(self.data[:])
-        print(self.data.shape)
-        print(self.data_headers)
+        #print(self.data[:])
+        #print(self.data.shape)
+        #print(self.data_headers)
         df = pd.DataFrame(self.data)
         #df.columns=self.data_headers[2:2+self.data_headers_number]
 
-        print(df)
+        #print(df)
         accepted_types_p = {'+', 'y', 'pass', 'p'}
         accepted_types_n = {'-', 'n', 'fail', 'f'}
 
-        print("Result type is accepted.")
+        #print("Result type is accepted.")
         if result_type in accepted_types_p:
             self.df_p=df
         elif result_type in accepted_types_n:
@@ -147,7 +151,9 @@ class Some_Processor:
     def __init__(self):
         self.periods=None
         self.df=None
+        self.data_points=None
     def get_params(self,DR):
+        self.data_points=DR.data_points
         self.param_dict=DR.param_dict.copy()
         self.periods = [
         ("Baseline", self.param_dict['Baseline']),
@@ -199,11 +205,55 @@ class Some_Processor:
         self.df=df_combined
         return df_combined
 
+    def avg_datatype(self,df=None):
+        
+        if df is not None:
+            self.df=df.copy()
+        df_avg = (
+        self.df.groupby("dataset")
+          .mean(numeric_only=True)
+          .reset_index()
+        )
+        self.df=df_avg
+        return self.df
+    
+    def sensor_split(self,df=None):
+        
+        if df is not None:
+            self.df=df.copy()
+
+
+        step = self.data_points
+        rows = []
+        
+        for dataset_val in [0, 1]:
+            df_subset = (self.df[self.df['dataset'] 
+                                 == dataset_val].drop(columns='dataset')
+                        )
+            arr = df_subset.to_numpy()
+        
+            for series_id, row in enumerate(arr):
+                num_chunks = len(row) // step
+                for chunk_id in range(num_chunks):
+                    chunk = row[chunk_id * step : (chunk_id + 1) * step]
+                    for point_id, val in enumerate(chunk):
+                        rows.append({
+                            'dataset': dataset_val,
+                            'series_id': series_id,
+                            'chunk_id': chunk_id,
+                            'point_id': point_id,
+                            'value': val
+                        })
+        
+        df_chunks = pd.DataFrame(rows)
+        self.df=df_chunks
+        print('df_chunks',df_chunks)
+        return df_chunks
 
 
     
 class Data_Show2:
-    def Data_show(self,SP):
+    def Data_show(self,SP,fig_name):
 
         
         df_c_long = SP.df.reset_index().melt(
@@ -237,7 +287,7 @@ class Data_Show2:
             y="Value", 
             color="dataset", 
             line_group="index",
-            title="Интерактивный график по классам",
+            title=fig_name,
             color_discrete_map={"0": 'red', "1": 'blue'},
             category_orders={"dataset": ["0", "1"]}
         )
@@ -313,8 +363,127 @@ class Data_Show2:
 
         
         # Показываем график в браузере
-        fig.write_html("interactive_plot.html")
-        webbrowser.open("interactive_plot.html")
+        fig.write_html(fig_name+".html")
+        webbrowser.open(fig_name+".html")
+        
+        
+    def Data_show_chunks(self,SP,fig_name):
+        df_chunks=SP.df
+        #palette_0 = px.colors.sequential.Blues
+        palette_25_blues = sample_colorscale(
+           pc.sequential.Blues,
+           np.linspace(0.5, 1.0, 25)  # 25 насыщенных значений
+                                             )
+        palette_25_reds = sample_colorscale(
+           pc.sequential.Reds,
+           np.linspace(0.5, 1.0, 25)  # 25 насыщенных значений
+                                           ) 
+        # Фильтрация
+        df_0 = df_chunks[df_chunks['dataset'] == 0]
+        df_1 = df_chunks[df_chunks['dataset'] == 1]
+        
+        fig = go.Figure()
+        
+        # === Dataset 0: синяя палитра ===
+        chunk_ids_0 = df_0['chunk_id'].unique()
+        for i, chunk_id in enumerate(chunk_ids_0):
+            chunk_df = df_0[df_0['chunk_id'] == chunk_id]
+            fig.add_trace(go.Scatter(
+                x=chunk_df['point_id'],
+                y=chunk_df['value'],
+                mode='lines',
+                name=f'ds=0, ch={chunk_id}',
+                line=dict(color=palette_25_blues[i % len(palette_25_blues)]),
+                legendgroup='0'
+            ))
+        
+        # === Dataset 1: красная палитра ===
+        chunk_ids_1 = df_1['chunk_id'].unique()
+        for i, chunk_id in enumerate(chunk_ids_1):
+            chunk_df = df_1[df_1['chunk_id'] == chunk_id]
+            fig.add_trace(go.Scatter(
+                x=chunk_df['point_id'],
+                y=chunk_df['value'],
+                mode='lines',
+                name=f'ds=1, ch={chunk_id}',
+                line=dict(color=palette_25_reds[i % len(palette_25_reds)]),
+                legendgroup='1'
+            ))
+        
+        # Настройка
+        fig.update_layout(
+            title="Графики кусочков по 121 точке (по dataset)",
+            xaxis_title="point_id",
+            yaxis_title="value",
+            height=600,
+            width=1000
+        )
+              
+        periods = SP.periods        
+        
+        # Преобразуем в количество точек
+        segment_lengths = [(name, int(round(seconds * 
+            SP.param_dict['Acquired data point per second'])))
+            for name, seconds in periods]
+        segment_lengths[-1]=(segment_lengths[-1][0],segment_lengths[-1][1]+1)
+        # Вычисляем позиции границ
+        boundaries = []
+        current_pos = 0
+        for sensor in range(1):
+            for name, length in segment_lengths:
+                boundaries.append((current_pos, name+' '+str(sensor)))
+                current_pos += length
+        print("boundaries",boundaries)    
+        # Получаем уникальные колонки в правильном порядке
+        #columns_sorted = sorted(df_c_long["Column"].unique(), key=lambda x: int(x))
+        #columns_sorted = sorted(df_c_long["Column"].unique())
+        #print("columns_sorted",columns_sorted) 
+        # Сопоставляем позиции точек с колонками
+        vlines = []
+        for pos, label in boundaries:
+            #if pos >= len(columns_sorted):
+            #    break
+            #col_name = columns_sorted[pos]
+            col_name = str(pos)
+            print("col_name, label",type(col_name),col_name, label)
+            vlines.append((col_name, label))
+
+
+        shapes = []
+        annotations = []
+        
+        
+        for col, label in vlines:
+            shapes.append(dict(
+                type="line",
+                x0=int(col), x1=int(col),  # ← приведение к числу
+                y0=0, y1=1,
+                xref="x", yref="paper",
+                line=dict(color="black", width=1, dash="dot")
+            ))
+        annotations.append(dict(
+            x=int(col),
+            y=1.05,
+            xref="x",
+            yref="paper",
+            text=label,
+            showarrow=False,
+            font=dict(size=10, color="black"),
+            xanchor="left",
+            textangle=-90
+        ))
+        
+        fig.update_layout(
+            shapes=shapes,
+            annotations=annotations,
+            margin=dict(t=80)  # немного увеличить верхний отступ
+        )
+
+
+       # Показываем график в браузере
+        fig.write_html(fig_name+".html")
+        webbrowser.open(fig_name+".html")
+    
 
 
 
@@ -322,22 +491,84 @@ class Data_Show2:
 
 
 class ProccesingFFE:
+    def __init__(self):
+        self.DR=None
+        self.DSh=None
+        self.SP=None
     def Proccesing(self,folder_pass_path,folder_fail_path):
-        DR=DataRead()
-        DSh=Data_Show2()
-        SP=Some_Processor()
-        DR.read_result(folder_pass_path,'+')
-        DR.read_result(folder_fail_path,'-')
-        SP.get_params(DR)
-        SP.combo_result(DR.df_p,DR.df_n)
-        dfcс= SP.del_pause("Pause")
-        DSh.Data_show(SP)
+        self.DR=DataRead()
+        self.DSh=Data_Show2()
+        self.SP=Some_Processor()
+        self.DR.read_result(folder_pass_path,'+')
+        self.DR.read_result(folder_fail_path,'-')
+        self.SP.get_params(self.DR)
+        self.SP.combo_result(self.DR.df_p,self.DR.df_n)
+        #self.SP.del_pause("Pause")
+        #self.DSh.Data_show(self.SP,"each_sensor")
+        self.SP.avg_datatype()
+        #self.DSh.Data_show(self.SP,"avg_sensor")
+        self.SP.sensor_split()
+        self.DSh.Data_show_chunks(self.SP,"avg_sensor_separate")
 
 if __name__=='__main__':
-    pr=ProccesingFFE()
+    Pr=ProccesingFFE()
     folder_pass_path = "./p"
     folder_fail_path = "./n"
-    pr.Proccesing(folder_pass_path, folder_fail_path)
+    Pr.Proccesing(folder_pass_path, folder_fail_path)
+
+# =============================================================================
+#     import pandas as pd
+#     from sklearn.decomposition import PCA
+#     from sklearn.preprocessing import StandardScaler
+#     import matplotlib.pyplot as plt
+#     import seaborn as sns
+# 
+#     # Пример: загрузим какие-нибудь данные
+#     # Предположим, у тебя есть датафрейм df с признаками
+#     # df = pd.read_csv('your_data.csv')
+#     
+#     # Шаг 1: Отделим только числовые признаки
+#     
+#     X = Pr.SP.df
+#     print('x',X)
+#     X.columns = X.columns.astype(str)
+#     X = X.drop(columns=['dataset'])
+#     #print('x',X)
+#     # Шаг 2: Стандартизируем данные
+#     scaler = StandardScaler()
+#     X_scaled = scaler.fit_transform(X)
+#     
+#     # Шаг 3: PCA
+#     pca = PCA()
+#     X_pca = pca.fit_transform(X_scaled)
+#     
+#     # Шаг 4: Важность признаков
+#     # PCA.components_ показывает вклад признаков в компоненты
+#     loadings = pd.DataFrame(
+#         data=pca.components_.T,
+#         columns=[f"PC{i+1}" for i in range(len(pca.components_))],
+#         index=X.columns
+#     )
+#     
+#     # Посмотрим важность признаков в первой компоненте (или в нескольких)
+#     print("Важность признаков для PC1:")
+#     print(loadings['PC1'].sort_values(ascending=False))
+#     
+#     # Альтернативно: можно визуализировать
+#     plt.figure(figsize=(10, 6))
+#     sns.barplot(x=loadings['PC1'].abs().sort_values(ascending=False).index,
+#                 y=loadings['PC1'].abs().sort_values(ascending=False).values)
+#     plt.title('Feature Importance in Principal Component 1')
+#     plt.ylabel('Absolute Loading')
+#     plt.xticks(rotation=45)
+#     plt.tight_layout()
+#     plt.show()
+#     
+#     # Объяснённая дисперсия:
+#     print("Объяснённая дисперсия по компонентам:")
+#     print(pca.explained_variance_ratio_)
+# 
+# =============================================================================
 
 # =============================================================================
 # class DataShow1:
