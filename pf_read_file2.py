@@ -502,8 +502,8 @@ class Statistical_Processor:
                 'importance': mi_scores
             }).sort_values('importance', ascending=False)
         
-        self.importance=mi_importance_df
-        return self.importance
+        self.mi_importance=mi_importance_df
+        return self.mi_importance
 
 
 
@@ -605,7 +605,7 @@ class Data_Show2:
         webbrowser.open(fig_name+".html")
     
         
-    def Data_show_st(self,SP,fig_name,statistical=None):
+    def Data_show_st(self,SP,fig_name,statistic):
 
         
         df_c_long = SP.df.reset_index().melt(
@@ -669,20 +669,22 @@ class Data_Show2:
 
 
 
-        importance_df = statistical.importance.copy()
+        pca_importance_df = statistic.pca_importance.copy()
+        mi_importance_df = statistic.mi_importance.copy()
     
         # Убедимся, что названия признаков — строки (совпадают с df_c_long["Column"])
-        importance_df['feature'] = importance_df['feature'].astype(str)
+        pca_importance_df['feature'] = pca_importance_df['feature'].astype(str)
+        mi_importance_df['feature'] = mi_importance_df['feature'].astype(str)
         
         # Создаём subplots: 2 строки, общий X
         fig = make_subplots(
-            rows=2, cols=1,
-            row_heights=[0.9, 0.1],
+            rows=3, cols=1,
+            row_heights=[0.8, 0.1,0.1],
             shared_xaxes=True,
-            vertical_spacing=0.02,
-            subplot_titles=(fig_name, "Feature Importance")
+            vertical_spacing=0.05,
+            subplot_titles=(fig_name, "PCA Importance","MI Importance" )
         )
-        fig.update_yaxes(domain=[0.15, 0.85], row=1, col=1)  # ← опусти верхнюю границу subplot'а 1
+        fig.update_yaxes(domain=[0.3, 0.85], row=1, col=1)  # ← опусти верхнюю границу subplot'а 1
         # Верхний график — твой line plot
         dfg=df_c_long.groupby(["dataset", "index"])
         for key, group in dfg:
@@ -728,14 +730,25 @@ class Data_Show2:
         # Нижняя полоска — heatmap 1xN
         fig.add_trace(
             go.Heatmap(
-                z=[importance_df['importance'].values],  # 2D: одна строка
-                x=importance_df['feature'],
+                z=[pca_importance_df['importance'].values],  # 2D: одна строка
+                x=pca_importance_df['feature'],
                 colorscale='Viridis',
                 showscale=True,
-                colorbar=dict(title='Importance', y=0.15)
+                colorbar=dict(title='PCA Importance', y=0.2,len=0.2)
             ),
             row=2, col=1
         )
+        fig.add_trace(
+            go.Heatmap(
+                z=[mi_importance_df['importance'].values],  # 2D: одна строка
+                x=mi_importance_df['feature'],
+                colorscale='Viridis',
+                showscale=True,
+                colorbar=dict(title='MI Importance', y=0,len=0.2)
+            ),
+            row=3, col=1
+        )
+
         
         # Оформление
         fig.update_layout(
@@ -918,10 +931,10 @@ class ProccesingFFE:
         #self.SP12=copy.deepcopy(self.SP)
         self.SP.half_sum_dif()
         #self.DSh.Data_show(self.SP,"each_halfsumdif_sensor")
-        #self.StP.pca_analize(self.SP)
+        self.StP.pca_analize(self.SP)
         #self.DSh.Data_show_st(self.SP,"each_halfsumdif_sensor",statistical=self.StP)
         self.StP.mi_analize(self.SP)
-        self.DSh.Data_show_st(self.SP,"each_halfsumdif_sensor",statistical=self.StP)
+        self.DSh.Data_show_st(self.SP,"each_halfsumdif_sensor",statistic=self.StP)
 
 
       
