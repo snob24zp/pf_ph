@@ -273,8 +273,44 @@ class Some_Processor:
         
         df_chunks = pd.DataFrame(rows)
         self.df=df_chunks
-        print('df_chunks',df_chunks)
+        #print('df_chunks',df_chunks)
         return df_chunks
+    
+    def chunk2wide(self, df=None):
+        """
+        Преобразует DataFrame из длинного chunk-формата обратно в широкий формат.
+        Требуется, чтобы были колонки:
+        ['dataset', 'series_id', 'chunk_id', 'point_id', 'value']
+        """
+    
+        if df is not None:
+            self.df = df.copy()
+    
+        # Создадим колонку абсолютной позиции точки
+        self.df['abs_point_id'] = (
+            self.df['chunk_id'] * self.data_points + self.df['point_id']
+        )
+    
+        # Упорядочим и перегруппируем
+        wide_df = (
+            self.df.sort_values(['dataset', 'series_id', 'abs_point_id'])
+            .pivot_table(
+                index=['dataset', 'series_id'],
+                columns='abs_point_id',
+                values='value'
+            )
+            .reset_index()
+        )
+    
+        # Приведение типа колонок к int (если нужно)
+        wide_df.columns.name = None  # убираем имя колонок
+        wide_df.columns = ['dataset', 'series_id'] + sorted(
+            [int(c) for c in wide_df.columns[2:]]
+        )
+        #wide_df.drop(columns='series_id')
+        wide_df = wide_df[wide_df.columns[2:].tolist() + wide_df.columns[:1].tolist()]
+        self.df = wide_df
+        return wide_df
     
     def chunks_centering(self):
         self.df['value'] -= self.df.groupby(
@@ -308,6 +344,33 @@ class Some_Processor:
         self.df.iloc[:,12 * step:24 * step] = (A + B)/2
     
         return self.df
+
+
+    def subtract_base_chunk(self,df=None):
+        """
+        Вычитает из 'value' в каждой группе (dataset, series_id, chunk_id)
+        среднее значение по 8 наименьшим point_id в этой группе.
+        """
+        if df is not None:
+            self.df=df.copy()
+        group_keys = ['dataset', 'series_id', 'chunk_id']
+        
+        #print(self.param_dict)
+        
+        base_size=int(self.param_dict['Baseline']*
+                      self.param_dict['Acquired data point per second'])
+    
+        def process_group(group):
+            # Среднее по 8 минимальным point_id
+            #print(group)
+            baseline = group.nsmallest(base_size, 'point_id')['value'].mean()
+            # Вычитание baseline из всей группы
+            group['value'] = group['value'] - baseline
+            return group
+    
+        # Применение ко всем группам
+        self.df = self.df.groupby(group_keys, group_keys=False).apply(process_group)
+        return self.df 
 
 class Statistical_Processor:
     def __init__(self):
@@ -505,73 +568,116 @@ class Statistical_Processor:
         self.mi_importance=mi_importance_df
         return self.mi_importance
 
+class Individual_Processor:
+    def __init__(self):
+        self.periods=None
+        self.df=None
+        self.data_points=None
+        self.param_dict={}
+    def get_params(self,SP):
+        self.data_points=SP.data_points
+        self.param_dict=SP.param_dict.copy()
+        self.periods = SP.periods
+        self.df=SP.df.copy()
 
-
+    def subtract_base_chunk(self,df=None):
+        """
+        Вычитает из 'value' в каждой группе (dataset, series_id, chunk_id)
+        среднее значение по 8 наименьшим point_id в этой группе.
+        """
+        if df is not None:
+            self.df=df.copy()
+        group_keys = ['dataset', 'series_id', 'chunk_id']
         
+        #print(self.param_dict)
+        
+        base_size=int(self.param_dict['Baseline']*
+                      self.param_dict['Acquired data point per second'])
     
-class Data_Show2:
-    def Data_show(self,SP,fig_name,statistical=None):
-
+        def process_group(group):
+            # Среднее по 8 минимальным point_id
+            #print(group)
+            baseline = group.nsmallest(base_size, 'point_id')['value'].mean()
+            # Вычитание baseline из всей группы
+            group['value'] = group['value'] - baseline
+            return group
+    
+        # Применение ко всем группам
+        self.df = self.df.groupby(group_keys, group_keys=False).apply(process_group)
+        return self.df    
         
+    def base_pause(self):
+        pass
+    def fourie(self):
+        pass
+    def exp_raise_fail(self):
+        pass
+        
+
+class Data_Show2:
+    def Data_show(self, SP, fig_name):
+        
+# =============================================================================
+#         if len(SP.df.columns)==5:
+#             df=
+# 
+# =============================================================================
         df_c_long = SP.df.reset_index().melt(
-        id_vars=["index", "dataset"], 
-        var_name="Column", 
-        value_name="Value"
+            id_vars=["index", "dataset"],
+            var_name="Column",
+            value_name="Value"
         )
 
-        # Преобразуем column в строку, если нужно (Plotly лучше работает)
+        # Convert column to string (for Plotly compatibility)
         df_c_long["Column"] = df_c_long["Column"].astype(str)
 
-        # Преобразование dataset в строку для корректной окраски
+        # Convert dataset to string for proper coloring
         df_c_long["dataset"] = df_c_long["dataset"].astype(str)
-        
-        
+
         fig = px.line(
-            df_c_long, 
-            x="Column", 
-            y="Value", 
-            color="dataset", 
+            df_c_long,
+            x="Column",
+            y="Value",
+            color="dataset",
             line_group="index",
             title=fig_name,
             color_discrete_map={"0": 'red', "1": 'blue'},
             category_orders={"dataset": ["0", "1"]}
         )
-      
+
         fig.update_layout(
             hovermode='closest',
-            xaxis_title='Признаки',
-            yaxis_title='Значения',
+            xaxis_title='Features',
+            yaxis_title='Values',
             height=600,
             width=1000
         )
 
-#line for phases        
-        periods = SP.periods        
-        
-        # Преобразуем в количество точек
-        segment_lengths = [(name, int(round(seconds * 
-            SP.param_dict['Acquired data point per second'])))
-            for name, seconds in periods]
-        segment_lengths[-1]=(segment_lengths[-1][0],segment_lengths[-1][1]+1)
-        # Вычисляем позиции границ
+        # Line for phases
+        periods = SP.periods
+
+        # Convert to number of data points
+        segment_lengths = [(name, int(round(seconds * SP.param_dict['Acquired data point per second'])))
+                           for name, seconds in periods]
+        segment_lengths[-1] = (segment_lengths[-1][0], segment_lengths[-1][1] + 1)
+
+        # Calculate boundary positions
         boundaries = []
         current_pos = 0
         for sensor in range(24):
             for name, length in segment_lengths:
-                boundaries.append((current_pos, name+' '+str(sensor)))
+                boundaries.append((current_pos, name + ' ' + str(sensor)))
                 current_pos += length
-        #print("boundaries",boundaries)    
-        # Сопоставляем позиции точек с колонками
+
+        # Map point positions to columns
         vlines = []
         for pos, label in boundaries:
             col_name = str(pos)
-            #print("col_name, label",type(col_name),col_name, label)
             vlines.append((col_name, label))
-
 
         shapes = []
         annotations = []
-        
+
         for col, label in vlines:
             shapes.append(dict(
                 type="line",
@@ -580,7 +686,6 @@ class Data_Show2:
                 xref="x", yref="paper",
                 line=dict(color="black", width=1, dash="dot")
             ))
-            #print("col, label",type(col), col, type(label), label)
             annotations.append(dict(
                 x=col,
                 y=1.05,
@@ -596,124 +701,57 @@ class Data_Show2:
         fig.update_layout(
             shapes=shapes,
             annotations=annotations,
-            margin=dict(t=80)  # немного увеличить верхний отступ
+            margin=dict(t=80)  # Slightly increase top margin
         )
 
-            
-        # Показываем график в браузере
-        fig.write_html(fig_name+".html")
-        webbrowser.open(fig_name+".html")
-    
-        
-    def Data_show_st(self,SP,fig_name,statistic):
+        # Show the plot in browser
+        fig.write_html(fig_name + ".html")
+        webbrowser.open(fig_name + ".html")
 
-        
+    def Data_show_st(self, SP, fig_name, statistic):
+
         df_c_long = SP.df.reset_index().melt(
-        id_vars=["index", "dataset"], 
-        var_name="Column", 
-        value_name="Value"
+            id_vars=["index", "dataset"],
+            var_name="Column",
+            value_name="Value"
         )
 
-        # Преобразуем column в строку, если нужно (Plotly лучше работает)
         df_c_long["Column"] = df_c_long["Column"].astype(str)
 
-        
+        # Line for phases
+        periods = SP.periods
+        segment_lengths = [(name, int(round(seconds * SP.param_dict['Acquired data point per second'])))
+                           for name, seconds in periods]
+        segment_lengths[-1] = (segment_lengths[-1][0], segment_lengths[-1][1] + 1)
 
-#line for phases        
-        periods = SP.periods        
-        
-        # Преобразуем в количество точек
-        segment_lengths = [(name, int(round(seconds * 
-            SP.param_dict['Acquired data point per second'])))
-            for name, seconds in periods]
-        segment_lengths[-1]=(segment_lengths[-1][0],segment_lengths[-1][1]+1)
-        # Вычисляем позиции границ
         boundaries = []
         current_pos = 0
         for sensor in range(24):
             for name, length in segment_lengths:
-                boundaries.append((current_pos, name+' '+str(sensor)))
+                boundaries.append((current_pos, name + ' ' + str(sensor)))
                 current_pos += length
-        #print("boundaries",boundaries)    
-        # Сопоставляем позиции точек с колонками
+
         vlines = []
         for pos, label in boundaries:
             col_name = str(pos)
-            #print("col_name, label",type(col_name),col_name, label)
             vlines.append((col_name, label))
 
-
         shapes = []
         annotations = []
-        
+
         for col, label in vlines:
             shapes.append(dict(
                 type="line",
                 x0=col, x1=col,
                 y0=0, y1=1,
-                xref="x", yref="paper",
+                xref="x", yref="y domain",
                 line=dict(color="black", width=1, dash="dot")
             ))
-            #print("col, label",type(col), col, type(label), label)
             annotations.append(dict(
                 x=col,
-                y=1.05,
+                y=1.0,
                 xref="x",
-                yref="paper",
-                text=label,
-                showarrow=False,
-                font=dict(size=10, color="black"),
-                xanchor="left",
-                textangle=-90
-            ))
-
-
-
-        pca_importance_df = statistic.pca_importance.copy()
-        mi_importance_df = statistic.mi_importance.copy()
-    
-        # Убедимся, что названия признаков — строки (совпадают с df_c_long["Column"])
-        pca_importance_df['feature'] = pca_importance_df['feature'].astype(str)
-        mi_importance_df['feature'] = mi_importance_df['feature'].astype(str)
-        
-        # Создаём subplots: 2 строки, общий X
-        fig = make_subplots(
-            rows=3, cols=1,
-            row_heights=[0.8, 0.1,0.1],
-            shared_xaxes=True,
-            vertical_spacing=0.05,
-            subplot_titles=(fig_name, "PCA Importance","MI Importance" )
-        )
-        fig.update_yaxes(domain=[0.3, 0.85], row=1, col=1)  # ← опусти верхнюю границу subplot'а 1
-        # Верхний график — твой line plot
-        dfg=df_c_long.groupby(["dataset", "index"])
-        for key, group in dfg:
-            fig.add_trace(
-                go.Scatter(x=group["Column"], y=group["Value"],
-                           mode='lines',
-                           name=f"dataset {key[0]} - idx {key[1]}",
-                           line=dict(color='red' if key[0] == 0 else 'blue')),
-                           
-                row=1, col=1
-            )
-            #print(type(key[0]),key[0])
-        shapes = []
-        annotations = []
-        
-        for col, label in vlines:
-            shapes.append(dict(
-                type="line",
-                x0=col, x1=col,
-                y0=0, y1=1,
-                xref="x", yref="y domain",#yref="y",  # было yref="paper" → теперь yref="y"
-                line=dict(color="black", width=1, dash="dot")
-            ))
-            
-            annotations.append(dict(
-                x=col,
-                y=1.0,               # было y=1.05 → теперь чуть ближе к оси, внутри subplot
-                xref="x",
-                yref="y domain", #yref="y",             # было yref="paper" → теперь yref="y"
+                yref="y domain",
                 text=label,
                 showarrow=False,
                 font=dict(size=10, color="black"),
@@ -721,140 +759,173 @@ class Data_Show2:
                 yanchor="bottom",
                 textangle=-90
             ))
-        
+
+        pca_importance_df = statistic.pca_importance.copy()
+        mi_importance_df = statistic.mi_importance.copy()
+
+        pca_importance_df['feature'] = pca_importance_df['feature'].astype(str)
+        mi_importance_df['feature'] = mi_importance_df['feature'].astype(str)
+
+        fig = make_subplots(
+            rows=3, cols=1,
+            row_heights=[0.8, 0.1, 0.1],
+            shared_xaxes=True,
+            vertical_spacing=0.05,
+            subplot_titles=(fig_name, "PCA Importance", "MI Importance")
+        )
+        fig.update_yaxes(domain=[0.3, 0.85], row=1, col=1)
+
+        dfg = df_c_long.groupby(["dataset", "index"])
+        for key, group in dfg:
+            fig.add_trace(
+                go.Scatter(x=group["Column"], y=group["Value"],
+                           mode='lines',
+                           name=f"dataset {key[0]} - idx {key[1]}",
+                           line=dict(color='red' if key[0] == 0 else 'blue')),
+                row=1, col=1
+            )
+
         fig.update_layout(
             shapes=shapes,
             annotations=annotations,
-            margin=dict(t=320)  # без изменений
+            margin=dict(t=320)
         )
-        # Нижняя полоска — heatmap 1xN
+
         fig.add_trace(
             go.Heatmap(
-                z=[pca_importance_df['importance'].values],  # 2D: одна строка
+                z=[pca_importance_df['importance'].values],
                 x=pca_importance_df['feature'],
                 colorscale='Viridis',
                 showscale=True,
-                colorbar=dict(title='PCA Importance', y=0.2,len=0.2)
+                colorbar=dict(title='PCA Importance', y=0.2, len=0.2)
             ),
             row=2, col=1
         )
         fig.add_trace(
             go.Heatmap(
-                z=[mi_importance_df['importance'].values],  # 2D: одна строка
+                z=[mi_importance_df['importance'].values],
                 x=mi_importance_df['feature'],
                 colorscale='Viridis',
                 showscale=True,
-                colorbar=dict(title='MI Importance', y=0,len=0.2)
+                colorbar=dict(title='MI Importance', y=0, len=0.2)
             ),
             row=3, col=1
         )
 
-        
-        # Оформление
         fig.update_layout(
             height=600,
             showlegend=False,
             title=fig_name,
             margin=dict(t=50, b=50),
         )
-            
-        # Показываем график в браузере
-        fig.write_html(fig_name+".html")
-        webbrowser.open(fig_name+".html")
-        
-        
-    def Data_show_chunks(self,SP,fig_name):
-        df_chunks=SP.df
-        #palette_0 = px.colors.sequential.Blues
-        palette_25_blues = sample_colorscale(
-           pc.sequential.Blues,
-           np.linspace(0.5, 1.0, 25)  # 25 насыщенных значений
-                                             )
-        palette_25_reds = sample_colorscale(
-           pc.sequential.Reds,
-           np.linspace(0.5, 1.0, 25)  # 25 насыщенных значений
-                                           ) 
-        # Фильтрация
+
+
+    def Data_show_chunks(self, SP, fig_name):
+        df_chunks = SP.df
+        palette_25_blues = sample_colorscale(pc.sequential.Blues, np.linspace(0.5, 1.0, 25))
+        palette_25_reds = sample_colorscale(pc.sequential.Reds, np.linspace(0.5, 1.0, 25))
+
         df_0 = df_chunks[df_chunks['dataset'] == 0]
         df_1 = df_chunks[df_chunks['dataset'] == 1]
-        
+
         fig = go.Figure()
-        
-        # === Dataset 0: синяя палитра ===
+
         chunk_ids_0 = df_0['chunk_id'].unique()
         for i, chunk_id in enumerate(chunk_ids_0):
             chunk_df = df_0[df_0['chunk_id'] == chunk_id]
+            pd.set_option('display.max_rows', None)  # Показывать все строки
+            #print(chunk_df['point_id'])
+            #print(len(chunk_df['point_id']))
+            
+            x_vals = []
+            y_vals = []
+            
+            points_per_period = SP.data_points  # обычно 121
+            num_points = len(chunk_df)
+            num_periods = num_points // points_per_period
+            
+            for p in range(num_periods):
+                chunk = chunk_df.iloc[p * points_per_period : (p + 1) * points_per_period]
+                x_vals.extend(chunk['point_id'].tolist())
+                y_vals.extend(chunk['value'].tolist())
+                
+                # Добавим разрыв между периодами
+                x_vals.append(None)
+                y_vals.append(None)
+            
             fig.add_trace(go.Scatter(
-                x=chunk_df['point_id'],
-                y=chunk_df['value'],
+                x=x_vals,
+                y=y_vals,
                 mode='lines',
                 name=f'ds=0, ch={chunk_id}',
                 line=dict(color=palette_25_blues[i % len(palette_25_blues)]),
-                legendgroup='0'
+                #legendgroup='0'
             ))
-        
-        # === Dataset 1: красная палитра ===
+
         chunk_ids_1 = df_1['chunk_id'].unique()
         for i, chunk_id in enumerate(chunk_ids_1):
             chunk_df = df_1[df_1['chunk_id'] == chunk_id]
+            
+            x_vals = []
+            y_vals = []
+            
+            points_per_period = SP.data_points  # обычно 121
+            num_points = len(chunk_df)
+            num_periods = num_points // points_per_period
+            
+            for p in range(num_periods):
+                chunk = chunk_df.iloc[p * points_per_period : (p + 1) * points_per_period]
+                x_vals.extend(chunk['point_id'].tolist())
+                y_vals.extend(chunk['value'].tolist())
+                
+                # Добавим разрыв между периодами
+                x_vals.append(None)
+                y_vals.append(None)
+            
+            
             fig.add_trace(go.Scatter(
-                x=chunk_df['point_id'],
-                y=chunk_df['value'],
+                x=x_vals,
+                y=y_vals,
                 mode='lines',
                 name=f'ds=1, ch={chunk_id}',
                 line=dict(color=palette_25_reds[i % len(palette_25_reds)]),
-                legendgroup='1'
+                #legendgroup='1'
             ))
-        
-        # Настройка
+
         fig.update_layout(
-            title="Графики кусочков по 121 точке (по dataset)",
+            title="Chunk-wise Plots (121 points each, grouped by dataset)",
             xaxis_title="point_id",
             yaxis_title="value",
             height=600,
             width=1000
         )
-              
-        periods = SP.periods        
-        
-        # Преобразуем в количество точек
-        segment_lengths = [(name, int(round(seconds * 
-            SP.param_dict['Acquired data point per second'])))
-            for name, seconds in periods]
-        segment_lengths[-1]=(segment_lengths[-1][0],segment_lengths[-1][1]+1)
-        # Вычисляем позиции границ
+
+        periods = SP.periods
+        segment_lengths = [(name, int(round(seconds * SP.param_dict['Acquired data point per second'])))
+                           for name, seconds in periods]
+        segment_lengths[-1] = (segment_lengths[-1][0], segment_lengths[-1][1] + 1)
+
         boundaries = []
         current_pos = 0
-        ux=len(chunk_df['point_id'].unique())
-        sensors=ux//SP.data_points
+        ux = len(chunk_df['point_id'].unique())
+        sensors = ux // SP.data_points
         for sensor in range(sensors):
             for name, length in segment_lengths:
-                boundaries.append((current_pos, name+' '+str(sensor)))
+                boundaries.append((current_pos, name + ' ' + str(sensor)))
                 current_pos += length
-        #print("boundaries",boundaries)    
-        # Получаем уникальные колонки в правильном порядке
-        #columns_sorted = sorted(df_c_long["Column"].unique(), key=lambda x: int(x))
-        #columns_sorted = sorted(df_c_long["Column"].unique())
-        #print("columns_sorted",columns_sorted) 
-        # Сопоставляем позиции точек с колонками
+
         vlines = []
         for pos, label in boundaries:
-            #if pos >= len(columns_sorted):
-            #    break
-            #col_name = columns_sorted[pos]
             col_name = str(pos)
-            #print("col_name, label",type(col_name),col_name, label)
             vlines.append((col_name, label))
-
 
         shapes = []
         annotations = []
-        
-        
+
         for col, label in vlines:
             shapes.append(dict(
                 type="line",
-                x0=int(col), x1=int(col),  # ← приведение к числу
+                x0=int(col), x1=int(col),
                 y0=0, y1=1,
                 xref="x", yref="paper",
                 line=dict(color="black", width=1, dash="dot")
@@ -870,21 +941,18 @@ class Data_Show2:
                 xanchor="left",
                 textangle=-90
             ))
-        
+
         fig.update_layout(
             shapes=shapes,
             annotations=annotations,
-            margin=dict(t=80)  # немного увеличить верхний отступ
+            margin=dict(t=80)
         )
 
 
-       # Показываем график в браузере
-        fig.write_html(fig_name+".html")
-        webbrowser.open(fig_name+".html")
+        fig.write_html(fig_name + ".html")
+        webbrowser.open(fig_name + ".html")
+        
     
-
-
-
 
 
 
@@ -930,11 +998,34 @@ class ProccesingFFE:
         #self.DSh.Data_show(self.SP,"avg_sensor")
         #self.SP12=copy.deepcopy(self.SP)
         self.SP.half_sum_dif()
-        #self.DSh.Data_show(self.SP,"each_halfsumdif_sensor")
+        self.DSh.Data_show(self.SP,"each_halfsumdif_sensor")
         self.StP.pca_analize(self.SP)
         #self.DSh.Data_show_st(self.SP,"each_halfsumdif_sensor",statistical=self.StP)
         self.StP.mi_analize(self.SP)
         self.DSh.Data_show_st(self.SP,"each_halfsumdif_sensor",statistic=self.StP)
+        
+    def fe(self,folder_pass_path,folder_fail_path):      
+        self.DR=DataRead()
+        self.DSh=Data_Show2()
+        self.SP=Some_Processor()
+        #self.StP=Statistical_Processor()
+        self.IP=Individual_Processor()
+        
+        self.DR.read_result(folder_pass_path,'+')
+        self.DR.read_result(folder_fail_path,'-')
+        self.SP.get_params(self.DR)
+        self.SP.combo_result(self.DR.df_p,self.DR.df_n)
+        self.DSh.Data_show(self.SP,"each_sensor, fe")
+        self.SP.half_sum_dif()
+        #self.SP.avg_datatype()
+        
+        self.SP.wide2chunk()
+        self.SP.subtract_base_chunk()
+        self.DSh.Data_show_chunks(self.SP,"sensor_separate_sub_base")
+        self.SP.chunk2wide()
+        self.DSh.Data_show(self.SP,"each_sensor_wo_base")
+
+        
 
 
       
@@ -942,7 +1033,9 @@ if __name__=='__main__':
     Pr=ProccesingFFE()
     folder_pass_path = "./p"
     folder_fail_path = "./n"
-    Pr.eda(folder_pass_path, folder_fail_path)
+    #Pr.view(folder_pass_path,folder_fail_path)
+    #Pr.eda(folder_pass_path, folder_fail_path)
+    Pr.fe(folder_pass_path, folder_fail_path)
 
 # =============================================================================
 #     import pandas as pd
