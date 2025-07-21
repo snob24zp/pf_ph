@@ -575,6 +575,11 @@ class Statistical_Processor:
         
         self.mi_importance=mi_importance_df
         return self.mi_importance
+    
+    def class_balance(self,SP):
+        self.part1=SP.df["dataset"].mean()
+        print("class_balance ",self.part1)
+        
 
 class Individual_Processor:
     def __init__(self):
@@ -827,6 +832,9 @@ class Data_Show2:
             margin=dict(t=50, b=50),
         )
 
+        fig.write_html(fig_name + ".html")
+        webbrowser.open(fig_name + ".html")
+
 
     def Data_show_chunks(self, SP, fig_name):
         df_chunks = SP.df
@@ -1016,13 +1024,14 @@ class ProccesingFFE:
         self.DR=DataRead()
         self.DSh=Data_Show2()
         self.SP=Some_Processor()
-        #self.StP=Statistical_Processor()
+        self.StP=Statistical_Processor()
         #self.IP=Individual_Processor()
         
         self.DR.read_result(folder_pass_path,'+')
         self.DR.read_result(folder_fail_path,'-')
         self.SP.get_params(self.DR)
         self.SP.combo_result(self.DR.df_p,self.DR.df_n)
+        self.StP.class_balance(self.SP)
         #self.DSh.Data_show(self.SP,"each_sensor, fe")
         self.SP.del_peaks()
         #self.DSh.Data_show(self.SP,"each_sensor_interpolation, fe")
@@ -1033,6 +1042,7 @@ class ProccesingFFE:
         self.SP.subtract_base_chunk()
         #self.DSh.Data_show_chunks(self.SP,"sensor_separate_sub_base")
         self.SP.chunk2wide()
+        
         self.DSh.Data_show(self.SP,"each_sensor_wo_base")
 
         
@@ -1045,10 +1055,10 @@ if __name__=='__main__':
     #folder_fail_path = "./Chicken Data Combined FAIL/Chicken Data Combined FAIL"
     #folder_pass_path = "./p3/p3"
     #folder_fail_path = "./n3/n3"
-    #folder_pass_path = "./p2/p2"
-    #folder_fail_path = "./n2/n2"
+    folder_pass_path = "./p2/p2"
+    folder_fail_path = "./n2/n2"
 
     #Pr.view(folder_pass_path,folder_fail_path)
-    #Pr.eda(folder_pass_path, folder_fail_path)
-    Pr.fe(folder_pass_path, folder_fail_path)
+    Pr.eda(folder_pass_path, folder_fail_path)
+    #Pr.fe(folder_pass_path, folder_fail_path)
 

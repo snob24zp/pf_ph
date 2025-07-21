@@ -61,11 +61,11 @@ class CNN1D(nn.Module):
         self.bn2 = nn.BatchNorm1d(128)
         self.pool2 = nn.MaxPool1d(2)
 
-        self.global_pool = nn.AdaptiveAvgPool1d(5)  # адаптивное усреднение в 5 сегментов
+        self.global_pool = nn.AdaptiveMaxPool1d(20)  # адаптивное усреднение в 5 сегментов
         self.dropout = nn.Dropout(0.4)
 
         # 128 каналов × 5 временных сегментов → 640 входов в FC
-        self.fc1 = nn.Linear(128 * 5, 128)
+        self.fc1 = nn.Linear(128 * 20, 128)
         self.fc2 = nn.Linear(128, 1)
 
     def forward(self, x):
