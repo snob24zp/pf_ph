@@ -142,6 +142,7 @@ class DataRead:
         #print(self.data_headers)
         df = pd.DataFrame(self.data)
         #df.columns=self.data_headers[2:2+self.data_headers_number]
+        df['fname'] = files
 
         #print(df)
         accepted_types_p = {'+', 'y', 'pass', 'p'}
@@ -161,8 +162,11 @@ class Some_Processor:
         self.periods=None
         self.df=None
         self.data_points=None
+        self.sensor_number=None
+        
     def get_params(self,DR):
         self.data_points=DR.data_points
+        self.sensor_number=DR.data_headers_number-2
         self.param_dict=DR.param_dict.copy()
         self.periods = [
         ("Baseline", self.param_dict['Baseline']),
@@ -186,7 +190,7 @@ class Some_Processor:
         segment_lengths[-1]=(segment_lengths[-1][0],segment_lengths[-1][1]+1)
         # Вычисляем позиции границ
         current_pos = 0
-        for sensor in range(24):
+        for sensor in range(self.sensor_number):
             for name, length in segment_lengths:
                 if name==phase:
                     to_drop.extend(range(current_pos, current_pos + length))
@@ -209,8 +213,12 @@ class Some_Processor:
         #print(df_n)
 
         df_combined = pd.concat([df_p1, df_n1])
+        
+        df_combined=df_combined[(df_combined.columns[:-2].tolist()
+                             +[df_combined.columns[-1]]
+                             +[df_combined.columns[-2]])]
 
-        print("df_combined")
+        print("df_combined",df_combined.columns )
         self.df=df_combined
         return df_combined
 
@@ -243,6 +251,8 @@ class Some_Processor:
         if df is not None:
             self.df=df.copy()
             
+        print("wide2chunk 1",self.df.columns)   
+        
         if step is None:
             step=1
             
@@ -253,18 +263,23 @@ class Some_Processor:
         rows = []
         
         for dataset_val in [0, 1]:
+            
+            fnames = self.df.loc[self.df['dataset'] == dataset_val, 'fname'].values
+
+            
             df_subset = (self.df[self.df['dataset'] 
-                                 == dataset_val].drop(columns='dataset')
+                                 == dataset_val].drop(columns=['dataset','fname'])
                         )
             arr = df_subset.to_numpy()
         
-            for series_id, row in enumerate(arr):
+            for series_id, (row,fname) in enumerate(zip(arr,fnames)):
                 num_chunks = len(row) // step
                 for chunk_id in range(num_chunks):
                     chunk = row[chunk_id * step : (chunk_id + 1) * step]
                     for point_id, val in enumerate(chunk):
                         rows.append({
                             'dataset': dataset_val,
+                            'fname': fname,
                             'series_id': series_id,
                             'chunk_id': chunk_id,
                             'point_id': point_id,
@@ -280,11 +295,8 @@ class Some_Processor:
         """
         Преобразует DataFrame из длинного chunk-формата обратно в широкий формат.
         Требуется, чтобы были колонки:
-        ['dataset', 'series_id', 'chunk_id', 'point_id', 'value']
+        ['dataset', 'series_id', 'chunk_id', 'point_id', 'value', 'fname']
         """
-    
-        if df is not None:
-            self.df = df.copy()
     
         # Создадим колонку абсолютной позиции точки
         self.df['abs_point_id'] = (
@@ -295,22 +307,26 @@ class Some_Processor:
         wide_df = (
             self.df.sort_values(['dataset', 'series_id', 'abs_point_id'])
             .pivot_table(
-                index=['dataset', 'series_id'],
+                index=['dataset', 'series_id', 'fname'],
                 columns='abs_point_id',
                 values='value'
             )
             .reset_index()
         )
     
-        # Приведение типа колонок к int (если нужно)
-        wide_df.columns.name = None  # убираем имя колонок
-        wide_df.columns = ['dataset', 'series_id'] + sorted(
-            [int(c) for c in wide_df.columns[2:]]
-        )
-        #wide_df.drop(columns='series_id')
-        wide_df = wide_df[wide_df.columns[2:].tolist() + wide_df.columns[:1].tolist()]
+        # Убираем имя у колонок (после pivot)
+        wide_df.columns.name = None
+    
+        # Приводим abs_point_id к int и упорядочиваем колонки
+        fixed_columns = ['dataset', 'fname']
+        point_columns = sorted([int(c) for c in wide_df.columns if isinstance(c, int)])
+    
+        wide_df = wide_df[point_columns+fixed_columns]
         self.df = wide_df
+        print("chunk2wide с fname:", self.df.columns)
+    
         return wide_df
+
     
     def chunks_centering(self):
         self.df['value'] -= self.df.groupby(
@@ -318,11 +334,12 @@ class Some_Processor:
         return self.df
 
     def half_sum_dif(self,df=None):
-        
         if df is not None:
             self.df=df.copy()
         
-        step=self.data_points    
+        step=self.data_points  
+        
+        print("half_sum_dif 1",self.df.columns)
         
         # Убедимся, что все названия колонок — строки
         #self.df.columns = self.df.columns.astype(str)
@@ -342,7 +359,7 @@ class Some_Processor:
         # Вычисляем новые значения
         self.df.iloc[:,:12 * step] = (A - B)/2
         self.df.iloc[:,12 * step:24 * step] = (A + B)/2
-    
+        print("half_sum_dif 2",self.df.columns)
         return self.df
 
 
@@ -373,10 +390,19 @@ class Some_Processor:
         return self.df 
     
     def del_peaks(self):
-        df_filtered = self.df.mask(self.df.abs() > 1000)
         
-        # Применим линейную интерполяцию по строкам
-        self.df = df_filtered.interpolate(axis=1, method='linear', limit_direction='both')
+        n = self.data_points*self.sensor_number  # количество первых столбцов, к которым применить
+
+        # Разделим DataFrame на две части
+        df_part_to_filter = self.df.iloc[:, :n]
+        df_part_rest = self.df.iloc[:, n:]
+        
+        # Маскируем большие значения и интерполируем только в нужной части
+        df_filtered = df_part_to_filter.mask(df_part_to_filter.abs() > 1000)
+        df_filtered = df_filtered.interpolate(axis=1, method='linear', limit_direction='both')
+        
+        # Собираем DataFrame обратно
+        self.df = pd.concat([df_filtered, df_part_rest], axis=1)
         
         return self.df  
 
@@ -630,16 +656,15 @@ class Individual_Processor:
 class Data_Show2:
     def Data_show(self, SP, fig_name):
         
-# =============================================================================
-#         if len(SP.df.columns)==5:
-#             df=
-# 
-# =============================================================================
+        print(SP.df.columns)
+        
         df_c_long = SP.df.reset_index().melt(
-            id_vars=["index", "dataset"],
+            id_vars=["index", "dataset","fname"],
             var_name="Column",
             value_name="Value"
         )
+
+       
 
         # Convert column to string (for Plotly compatibility)
         df_c_long["Column"] = df_c_long["Column"].astype(str)
@@ -647,17 +672,48 @@ class Data_Show2:
         # Convert dataset to string for proper coloring
         df_c_long["dataset"] = df_c_long["dataset"].astype(str)
 
+
+
+#from plotly.colors import sample_colorscale
+#import numpy as np
+
+        # Добавим уникальные метки
+        df_c_long["label"] = df_c_long["dataset"] + ": " + df_c_long["fname"]
+        
+        # Преобразуем fname в строку (если это не так)
+        df_c_long["fname"] = df_c_long["fname"].astype(str)
+        
+        # Отсортируем fname внутри каждого класса
+        labels_0 = (
+            df_c_long[df_c_long["dataset"] == "0"]
+            .sort_values("fname")["label"]
+            .unique()
+        )
+        labels_1 = (
+            df_c_long[df_c_long["dataset"] == "1"]
+            .sort_values("fname")["label"]
+            .unique()
+        )
+        
+        # Создаём палитры
+        reds = sample_colorscale("Reds", np.linspace(0.3, 0.9, len(labels_0)))
+        blues = sample_colorscale("Blues", np.linspace(0.3, 0.9, len(labels_1)))
+        
+        # Собираем карту цветов
+        color_map = dict(zip(labels_0, reds)) | dict(zip(labels_1, blues))
+        
+        # Построение графика
         fig = px.line(
             df_c_long,
             x="Column",
             y="Value",
-            color="dataset",
-            line_group="index",
+            color="label",          # каждая линия отдельно
+            line_group="fname",     # чтобы линии не объединялись
+            hover_name="fname",
             title=fig_name,
-            color_discrete_map={"0": 'red', "1": 'blue'},
-            category_orders={"dataset": ["0", "1"]}
-        )
-
+            color_discrete_map=color_map
+        )        
+        
         fig.update_layout(
             hovermode='closest',
             xaxis_title='Features',
@@ -836,7 +892,7 @@ class Data_Show2:
         webbrowser.open(fig_name + ".html")
 
 
-    def Data_show_chunks(self, SP, fig_name):
+    def Data_show_chunks(self, SP, fig_name,step=1):
         df_chunks = SP.df
         palette_25_blues = sample_colorscale(pc.sequential.Blues, np.linspace(0.5, 1.0, 25))
         palette_25_reds = sample_colorscale(pc.sequential.Reds, np.linspace(0.5, 1.0, 25))
@@ -849,6 +905,7 @@ class Data_Show2:
         chunk_ids_0 = df_0['chunk_id'].unique()
         for i, chunk_id in enumerate(chunk_ids_0):
             chunk_df = df_0[df_0['chunk_id'] == chunk_id]
+            fname=''
             pd.set_option('display.max_rows', None)  # Показывать все строки
             #print(chunk_df['point_id'])
             #print(len(chunk_df['point_id']))
@@ -856,7 +913,7 @@ class Data_Show2:
             x_vals = []
             y_vals = []
             
-            points_per_period = SP.data_points  # обычно 121
+            points_per_period = SP.data_points*step  # обычно 121
             num_points = len(chunk_df)
             num_periods = num_points // points_per_period
             
@@ -873,7 +930,7 @@ class Data_Show2:
                 x=x_vals,
                 y=y_vals,
                 mode='lines',
-                name=f'ds=0, ch={chunk_id}',
+                name=f'ds=0, ch={chunk_id}, fn={fname}',
                 line=dict(color=palette_25_blues[i % len(palette_25_blues)]),
                 #legendgroup='0'
             ))
@@ -1044,6 +1101,33 @@ class ProccesingFFE:
         self.SP.chunk2wide()
         
         self.DSh.Data_show(self.SP,"each_sensor_wo_base")
+        
+    def af(self,folder_pass_path,folder_fail_path):     
+        """ additional feachures"""
+        self.DR=DataRead()
+        self.DSh=Data_Show2()
+        self.SP=Some_Processor()
+        self.StP=Statistical_Processor()
+        #self.IP=Individual_Processor()
+        
+        self.DR.read_result(folder_pass_path,'+')
+        self.DR.read_result(folder_fail_path,'-')
+        self.SP.get_params(self.DR)
+        self.SP.combo_result(self.DR.df_p,self.DR.df_n)
+        self.StP.class_balance(self.SP)
+        #self.DSh.Data_show(self.SP,"each_sensor, fe")
+        self.SP.del_peaks()
+        self.DSh.Data_show(self.SP,"each_sensor_interpolation, fe")
+        self.SP.half_sum_dif()
+        #self.SP.avg_datatype()
+        
+        self.SP.wide2chunk()
+        self.SP.subtract_base_chunk()
+        self.DSh.Data_show_chunks(self.SP,"sensor_separate_sub_base")
+        self.SP.chunk2wide()
+        
+        self.DSh.Data_show(self.SP,"each_sensor_wo_base")
+
 
         
 #Chicken Data Combined FAIL\Chicken Data Combined FAIL
@@ -1059,6 +1143,7 @@ if __name__=='__main__':
     folder_fail_path = "./n2/n2"
 
     #Pr.view(folder_pass_path,folder_fail_path)
-    Pr.eda(folder_pass_path, folder_fail_path)
+    #Pr.eda(folder_pass_path, folder_fail_path)
     #Pr.fe(folder_pass_path, folder_fail_path)
+    Pr.af(folder_pass_path, folder_fail_path)
 
