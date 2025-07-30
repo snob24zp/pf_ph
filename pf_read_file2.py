@@ -405,6 +405,26 @@ class Some_Processor:
         self.df = pd.concat([df_filtered, df_part_rest], axis=1)
         
         return self.df  
+    
+    def del_mean_across_rows(self):
+        """
+        Удаляет среднее значение по каждой колонке (признаку), 
+        только в первых data_points * sensor_number столбцах.
+        """
+        n = self.data_points * self.sensor_number  # сколько столбцов обрабатываем
+    
+        # Разделим DataFrame
+        df_part_to_center = self.df.iloc[:, :n]
+        df_part_rest = self.df.iloc[:, n:]
+    
+        # Центрируем по колонкам: вычитаем среднее по каждой колонке
+        df_centered = df_part_to_center - df_part_to_center.mean(axis=0)
+    
+        # Объединяем обратно
+        self.df = pd.concat([df_centered, df_part_rest], axis=1)
+    
+        return self.df
+
 
     def add_fft_features(self, df=None, max_chunks=12):
         """
@@ -438,7 +458,7 @@ class Some_Processor:
             # Выполняем FFT
             spectrum = np.fft.fft(signal)/N*2
             amp = np.abs(spectrum)[:(N//2)]
-            phase = np.degrees(np.angle(spectrum))[:(N//2)]
+            phase = np.angle(spectrum)[:(N//2)]
     
             curr_chunk=max_chunk+1+chunk_id
             # Добавим амплитудный чанк (chunk_id + 1)
@@ -1267,9 +1287,10 @@ class ProccesingFFE:
         self.SP.del_peaks()
         #self.DSh.Data_show(self.SP,"each_sensor_interpolation, fe")
         self.SP.half_sum_dif()
+        self.SP.del_mean_across_rows()
         #self.SP.avg_datatype()
         
-        self.SP.df.to_csv("half_sum_dif.csv", index=False)
+        #self.SP.df.to_csv("half_sum_dif.csv", index=False)
         
         self.SP.wide2chunk()
         self.SP.subtract_base_chunk()
