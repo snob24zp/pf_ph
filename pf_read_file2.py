@@ -242,7 +242,7 @@ class Some_Processor:
         cols.remove("dataset")
         cols.insert(dataset_index, "dataset")
         df_avg = df_avg[cols]
-        
+        df_avg['fname']=""
         self.df=df_avg
         return self.df
     
@@ -324,7 +324,7 @@ class Some_Processor:
         wide_df = wide_df[point_columns+fixed_columns]
         self.df = wide_df
         print("chunk2wide с fname:", self.df.columns)
-    
+        
         return wide_df
 
     
@@ -406,6 +406,195 @@ class Some_Processor:
         
         return self.df  
 
+    def add_fft_features(self, df=None, max_chunks=12):
+        """
+        Выполняет FFT на первых N чанках каждого ряда и добавляет
+        амплитуды и фазы спектра как новые чанки (chunk_id += 1 и += 2).
+        """
+        if df is not None:
+            self.df = df.copy()
+    
+        group_keys = ['dataset','fname', 'series_id', 'chunk_id']
+        value_key = 'value'
+        point_key = 'point_id'
+    
+        # Найдём максимальный chunk_id 
+        max_chunk = self.df['chunk_id'].max()
+        #curr_chunk = max_chunk
+    
+        # Ограничим количество обрабатываемых чанков
+        df_limited = self.df.loc[self.df['chunk_id'] < max_chunks]
+    
+        fft_rows = []
+        #num_new_chunk = df_limited.groupby(group_keys).ngroups
+        for keys, group in df_limited.groupby(group_keys):
+            dataset,fname, series_id, chunk_id = keys
+            signal = group.sort_values(point_key)[value_key].to_numpy()
+        
+            # Дополнить до чётной длины
+            N = len(signal)
+            #signal = signal[:(N//2)*2]
+            
+            # Выполняем FFT
+            spectrum = np.fft.fft(signal)/N*2
+            amp = np.abs(spectrum)[:(N//2)]
+            phase = np.degrees(np.angle(spectrum))[:(N//2)]
+    
+            curr_chunk=max_chunk+1+chunk_id
+            # Добавим амплитудный чанк (chunk_id + 1)
+            for i, val in enumerate(amp):
+                fft_rows.append({
+                    'dataset': dataset,
+                    'fname': fname,
+                    'series_id': series_id,
+                    'chunk_id': curr_chunk,
+                    'point_id': i,
+                    'value': val
+                })
+            
+            N_amp=len(amp)
+            
+            if N_amp+len('phase')<N:
+                fft_rows.append({
+                    'dataset': dataset,
+                    'fname': fname,
+                    'series_id': series_id,
+                    'chunk_id': curr_chunk,
+                    'point_id': i+1,
+                    'value': 0
+                })
+                N_amp+=1
+
+                
+            
+            # Добавим фазовый чанк (chunk_id + 2)
+            for i, val in enumerate(phase):
+                fft_rows.append({
+                    'dataset': dataset,
+                    'fname': fname,
+                    'series_id': series_id,
+                    'chunk_id': curr_chunk,
+                    'point_id': i+N_amp,
+                    'value': val
+                })
+            
+                
+    
+        df_fft = pd.DataFrame(fft_rows)
+    
+        # Объединяем с исходным датафреймом
+        print("add_fft_features self.df",self.df.columns)
+        self.df = pd.concat([self.df, df_fft], ignore_index=True)
+        print("add_fft_features",self.df.columns)
+        self.sensor_number+=max_chunks
+        return self.df
+     
+      
+        
+    def add_antiderivative(self, df=None, max_chunks=12):
+        """
+        Выполняет FFT на первых N чанках каждого ряда и добавляет
+        амплитуды и фазы спектра как новые чанки (chunk_id += 1 и += 2).
+        """
+        if df is not None:
+            self.df = df.copy()
+    
+        group_keys = ['dataset','fname', 'series_id', 'chunk_id']
+        value_key = 'value'
+        point_key = 'point_id'
+    
+        # Найдём максимальный chunk_id 
+        max_chunk = self.df['chunk_id'].max()
+        #curr_chunk = max_chunk
+    
+        # Ограничим количество обрабатываемых чанков
+        df_limited = self.df.loc[self.df['chunk_id'] < max_chunks]
+    
+        antiderivative_rows = []
+        #num_new_chunk = df_limited.groupby(group_keys).ngroups
+        for keys, group in df_limited.groupby(group_keys):
+            dataset,fname, series_id, chunk_id = keys
+            signal = group.sort_values(point_key)[value_key].to_numpy()
+        
+            N = len(signal)
+            antiderivative = np.cumsum(signal)/N  
+    
+            curr_chunk=max_chunk+1+chunk_id
+            # Добавим амплитудный чанк (chunk_id + 1)
+            for i, val in enumerate(antiderivative):
+                antiderivative_rows.append({
+                    'dataset': dataset,
+                    'fname': fname,
+                    'series_id': series_id,
+                    'chunk_id': curr_chunk,
+                    'point_id': i,
+                    'value': val
+                })
+    
+        df_antiderivative = pd.DataFrame(antiderivative_rows)
+    
+        # Объединяем с исходным датафреймом
+        print("add_add_antiderivative self.df",self.df.columns)
+        self.df = pd.concat([self.df, df_antiderivative], ignore_index=True)
+        print("add_fft_features",self.df.columns)
+        self.sensor_number+=max_chunks
+        return self.df     
+ 
+    def add_curvative(self, df=None, max_chunks=12):
+        """
+        Кривизна на первых N чанках каждого ряда и добавляет
+        амплитуды и фазы спектра как новые чанки (chunk_id += 1 и += 2).
+        """
+        if df is not None:
+            self.df = df.copy()
+    
+        group_keys = ['dataset','fname', 'series_id', 'chunk_id']
+        value_key = 'value'
+        point_key = 'point_id'
+    
+        # Найдём максимальный chunk_id 
+        max_chunk = self.df['chunk_id'].max()
+        #curr_chunk = max_chunk
+    
+        # Ограничим количество обрабатываемых чанков
+        df_limited = self.df.loc[self.df['chunk_id'] < max_chunks]
+    
+        antiderivative_rows = []
+        #num_new_chunk = df_limited.groupby(group_keys).ngroups
+        for keys, group in df_limited.groupby(group_keys):
+            dataset,fname, series_id, chunk_id = keys
+            signal = group.sort_values(point_key)[value_key].to_numpy()
+        
+            N = len(signal)
+            dx = np.gradient(signal)
+            # Вторая производная
+            ddx = np.gradient(dx)
+            # Кривизна в дискретной форме (модуль для устойчивости)
+            curvature = np.abs(ddx) / (1 + dx**2)**1.5
+    
+            curr_chunk=max_chunk+1+chunk_id
+            # Добавим амплитудный чанк (chunk_id + 1)
+            for i, val in enumerate(curvature):
+                antiderivative_rows.append({
+                    'dataset': dataset,
+                    'fname': fname,
+                    'series_id': series_id,
+                    'chunk_id': curr_chunk,
+                    'point_id': i,
+                    'value': val
+                })
+    
+        df_curvature = pd.DataFrame(antiderivative_rows)
+    
+        # Объединяем с исходным датафреймом
+        print("add_add_antiderivative self.df",self.df.columns)
+        self.df = pd.concat([self.df, df_curvature], ignore_index=True)
+        print("add_fft_features",self.df.columns)
+        self.sensor_number+=max_chunks
+        return self.df     
+
+
+
 class Statistical_Processor:
     def __init__(self):
         self.pca_importance=None
@@ -420,7 +609,7 @@ class Statistical_Processor:
         target_names = 'dataset'
         
         y = X['dataset']
-        X = X.drop(columns=['dataset'])
+        X = X.drop(columns=['dataset','fname'])
         feature_names = X.columns.astype(str)
         
         #print('x',X)
@@ -543,7 +732,7 @@ class Statistical_Processor:
         target_names = 'dataset'
         
         y = X['dataset']
-        X = X.drop(columns=['dataset'])
+        X = X.drop(columns=['dataset','fname'])
         
         # Стандартизация
         X_scaled = StandardScaler().fit_transform(X)
@@ -608,47 +797,6 @@ class Statistical_Processor:
         
 
 class Individual_Processor:
-    def __init__(self):
-        self.periods=None
-        self.df=None
-        self.data_points=None
-        self.param_dict={}
-    def get_params(self,SP):
-        self.data_points=SP.data_points
-        self.param_dict=SP.param_dict.copy()
-        self.periods = SP.periods
-        self.df=SP.df.copy()
-
-    def subtract_base_chunk(self,df=None):
-        """
-        Вычитает из 'value' в каждой группе (dataset, series_id, chunk_id)
-        среднее значение по 8 наименьшим point_id в этой группе.
-        """
-        if df is not None:
-            self.df=df.copy()
-        group_keys = ['dataset', 'series_id', 'chunk_id']
-        
-        #print(self.param_dict)
-        
-        base_size=int(self.param_dict['Baseline']*
-                      self.param_dict['Acquired data point per second'])
-    
-        def process_group(group):
-            # Среднее по 8 минимальным point_id
-            #print(group)
-            baseline = group.nsmallest(base_size, 'point_id')['value'].mean()
-            # Вычитание baseline из всей группы
-            group['value'] = group['value'] - baseline
-            return group
-    
-        # Применение ко всем группам
-        self.df = self.df.groupby(group_keys, group_keys=False).apply(process_group)
-        return self.df    
-        
-    def base_pause(self):
-        pass
-    def fourie(self):
-        pass
     def exp_raise_fail(self):
         pass
         
@@ -696,8 +844,8 @@ class Data_Show2:
         )
         
         # Создаём палитры
-        reds = sample_colorscale("Reds", np.linspace(0.3, 0.9, len(labels_0)))
-        blues = sample_colorscale("Blues", np.linspace(0.3, 0.9, len(labels_1)))
+        reds = sample_colorscale("Reds", np.linspace(0.6, 1, len(labels_0)))
+        blues = sample_colorscale("Blues", np.linspace(1, 0.5, len(labels_1)))
         
         # Собираем карту цветов
         color_map = dict(zip(labels_0, reds)) | dict(zip(labels_1, blues))
@@ -733,7 +881,7 @@ class Data_Show2:
         # Calculate boundary positions
         boundaries = []
         current_pos = 0
-        for sensor in range(24):
+        for sensor in range(SP.sensor_number+1):
             for name, length in segment_lengths:
                 boundaries.append((current_pos, name + ' ' + str(sensor)))
                 current_pos += length
@@ -1117,16 +1265,26 @@ class ProccesingFFE:
         self.StP.class_balance(self.SP)
         #self.DSh.Data_show(self.SP,"each_sensor, fe")
         self.SP.del_peaks()
-        self.DSh.Data_show(self.SP,"each_sensor_interpolation, fe")
+        #self.DSh.Data_show(self.SP,"each_sensor_interpolation, fe")
         self.SP.half_sum_dif()
         #self.SP.avg_datatype()
         
+        self.SP.df.to_csv("half_sum_dif.csv", index=False)
+        
         self.SP.wide2chunk()
         self.SP.subtract_base_chunk()
-        self.DSh.Data_show_chunks(self.SP,"sensor_separate_sub_base")
+        #self.DSh.Data_show_chunks(self.SP,"sensor_separate_sub_base")
+        self.SP.add_fft_features()
+        self.SP.add_antiderivative()
+        self.SP.add_curvative()
         self.SP.chunk2wide()
         
-        self.DSh.Data_show(self.SP,"each_sensor_wo_base")
+        self.DSh.Data_show(self.SP,"each_sensor_ftt_ad")
+
+        self.StP.pca_analize(self.SP)
+        #self.DSh.Data_show_st(self.SP,"each_halfsumdif_sensor",statistical=self.StP)
+        self.StP.mi_analize(self.SP)
+        self.DSh.Data_show_st(self.SP,"each_halfsumdif_sensor",statistic=self.StP)
 
 
         

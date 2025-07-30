@@ -15,7 +15,7 @@ import pf_read_file2 as pfrf
 import matplotlib.pyplot as plt
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 import copy
-
+import pandas as pd
 
 
 # =============================================================================
@@ -32,14 +32,23 @@ class SensorDataset(Dataset):
         nsensor=12
         data_points=SP.data_points
         points=nsensor*data_points
-        df_12=SP.df.iloc[:, :points]
+        df_0=SP.df.iloc[:, :points]
+        #print('SensorDataset',df_0,df_0.shape)
+        df_49=SP.df.iloc[:, SP.data_points*49:SP.data_points*(49+12)]
+        #print('SensorDataset',df_49,df_49.shape)
+        df_data = pd.concat([df_0, df_49],axis=1, ignore_index=True)
+        #print('SensorDataset',df_data,df_data.shape)
         N = SP.df.shape[0]  # количество строк (образцов)
 
-        arr = df_12.values.reshape(N, 12, data_points)  # reshape с динамическим размером батча
+        arr = df_data.values.reshape(N, 24, data_points)  # reshape с динамическим размером батча
         tensorX = torch.tensor(arr, dtype=torch.float32)
+        #print('dataset',tensorX)
         y=SP.df["dataset"]
         self.X = tensorX
-        self.y = torch.tensor(y)
+        self.y = torch.tensor(y.values, dtype=torch.float32)
+        
+        print('SensorDataset',self.y.min(), self.y.max())
+        print(self.y.unique())
 
     def __len__(self):
         return len(self.X)
@@ -53,7 +62,7 @@ class SensorDataset(Dataset):
 class CNN1D(nn.Module):
     def __init__(self):
         super().__init__()
-        self.conv1 = nn.Conv1d(12, 64, kernel_size=7, padding=3)
+        self.conv1 = nn.Conv1d(24, 64, kernel_size=7, padding=3)
         self.bn1 = nn.BatchNorm1d(64)
         self.pool1 = nn.MaxPool1d(2)
 
@@ -98,6 +107,12 @@ def train(model, train_loader, val_loader, epochs=20, lr=1e-4):
             X_batch, y_batch = X_batch, y_batch.float()
             optimizer.zero_grad()
             outputs = model(X_batch)
+            
+            #print('train',outputs)
+            #print('train', y_batch)
+            #print("X_batch", X_batch.min(), X_batch.max(), X_batch.mean())
+            #print("y_batch", y_batch.min(), y_batch.max(), y_batch.isnan().any())
+            
             loss = criterion(outputs, y_batch)
             loss.backward()
             optimizer.step()
@@ -150,7 +165,7 @@ from sklearn.model_selection import KFold
 from torch.utils.data import Subset
 
 
-def k_fold_training(dataset, model_class, k=5, epochs=50, batch_size=8, lr=1e-4, device='cpu'):
+def k_fold_training(dataset, model_class, k=5, epochs=50, batch_size=8, lr=1e-5, device='cpu'):
     kf = KFold(n_splits=k, shuffle=True, random_state=42)
     all_metrics = []
 
@@ -192,7 +207,7 @@ if __name__=="__main__":
 
     #Pr.view(folder_pass_path,folder_fail_path)
     #Pr.eda(folder_pass_path, folder_fail_path)
-    Pr.fe(folder_pass_path, folder_fail_path)
+    Pr.af(folder_pass_path, folder_fail_path)
 
     # ==== 5. Подготовка ====
     dataset = SensorDataset(Pr.SP)
