@@ -75,26 +75,27 @@ class CNN1D(nn.Module):
         self.bn2 = nn.BatchNorm1d(128)
         self.pool2 = nn.MaxPool1d(2)
 
-        self.global_pool = nn.AdaptiveMaxPool1d(20)  # адаптивное усреднение в 5 сегментов
-        self.dropout = nn.Dropout(0.4)
+        self.global_pool = nn.AdaptiveMaxPool1d(20)
+        self.dropout_conv = nn.Dropout(0.1)
 
-        # 128 каналов × 5 временных сегментов → 640 входов в FC
         self.fc1 = nn.Linear(128 * 20, 128)
+        self.dropout_fc = nn.Dropout(0.4)
         self.fc2 = nn.Linear(128, 1)
 
     def forward(self, x):
-        x = self.pool1(torch.relu(self.bn1(self.conv1(x))))  # → (B, 64, L/2)
-        x = self.pool2(torch.relu(self.bn2(self.conv2(x))))  # → (B, 128, L/4)
-        x = self.global_pool(x)                              # → (B, 128, 5)
-        x = x.view(x.size(0), -1)                            # → (B, 128×5)
-        x = self.dropout(x)
-        x = torch.relu(self.fc1(x))                          # → (B, 128)
-        return torch.sigmoid(self.fc2(x)).squeeze(dim=1)          # → (B,)   
+        x = self.pool1(torch.relu(self.bn1(self.conv1(x))))
+        x = self.pool2(torch.relu(self.bn2(self.conv2(x))))
+        x = self.dropout_conv(x)
+        x = self.global_pool(x)
+        x = x.view(x.size(0), -1)
+        x = torch.relu(self.fc1(x))
+        x = self.dropout_fc(x)
+        return torch.sigmoid(self.fc2(x)).squeeze(dim=1)
 
 # ==== 4. Обучение ====
 def train(model, train_loader, val_loader, epochs=50, lr=5e-5):
     criterion = nn.BCELoss()
-    optimizer = optim.Adam(model.parameters(), lr=lr)
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=1e-4)
 
     # 🔄 Добавлено: списки для графиков
     train_losses = []
@@ -314,8 +315,15 @@ def k_fold_training(dataset, model_class, k=5, epochs=50, batch_size=8, lr=1e-5,
     kf = KFold(n_splits=k, shuffle=True, random_state=42)
     all_metrics = []
 
+    val_set=set()
+    wrong_set=set()
+    whole_set= set(range(len(dataset)))
+    
+
     for fold, (train_idx, val_idx) in enumerate(kf.split(dataset)):
         print(f"\n====== Fold {fold + 1} / {k} ======")
+
+        
 
         # Разбиение данных
         train_subset = Subset(dataset, train_idx)
@@ -333,6 +341,10 @@ def k_fold_training(dataset, model_class, k=5, epochs=50, batch_size=8, lr=1e-5,
         # Оценка
         metrics = evaluate_model(model, val_loader, device)
         all_metrics.append(metrics[:-1])
+        
+        val_set.update(val_idx.tolist())
+        wrong_set.update(metrics[-1].tolist())
+        
         print(f"Fold {fold + 1} metrics: Accuracy={metrics[0]:.4f}, Precision={metrics[1]:.4f}, Recall={metrics[2]:.4f}, F1={metrics[3]:.4f}")
         
         fname_list = sorted(Pr.SP.df.iloc[metrics[-1]]['fname'].tolist())
@@ -352,7 +364,13 @@ def k_fold_training(dataset, model_class, k=5, epochs=50, batch_size=8, lr=1e-5,
     avg = all_metrics.mean(axis=0)
     print(f"\n📊 Average over {k} folds:\n"
           f"Accuracy={avg[0]:.4f}, Precision={avg[1]:.4f}, Recall={avg[2]:.4f}, F1={avg[3]:.4f}")
-
+    
+    non_val_set=whole_set-val_set
+    print('val_set',val_set)
+    print('non_val_set',non_val_set)
+    print('wrong_set',wrong_set)
+    fname_list = sorted(Pr.SP.df.iloc[list(wrong_set)]['fname'].tolist())
+    print('wrong_set',fname_list)
 
     
 if __name__ == "__main__":
@@ -402,5 +420,5 @@ if __name__ == "__main__":
 
 
     # ==== 6. K-Fold для стабильности ====
-    k_fold_training(dataset, CNN1D, k=3, epochs=100, batch_size=8, lr=5e-5, device='cpu')
+    k_fold_training(dataset, CNN1D, k=5, epochs=100, batch_size=8, lr=5e-5, device='cpu')
     
