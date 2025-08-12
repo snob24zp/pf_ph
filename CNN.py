@@ -420,5 +420,5 @@ if __name__ == "__main__":
 
 
     # ==== 6. K-Fold для стабильности ====
-    k_fold_training(dataset, CNN1D, k=5, epochs=100, batch_size=8, lr=5e-5, device='cpu')
+    k_fold_training(dataset, CNN1D, k=5, epochs=50, batch_size=8, lr=5e-5, device='cpu')
     

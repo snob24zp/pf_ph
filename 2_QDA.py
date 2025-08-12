@@ -28,7 +28,7 @@ import matplotlib.pyplot as plt
 import pf_read_file2 as pfrf
 
 class ML_model:
-    def __init__(self,model,SP):
+    def __init__(self,model,SP,StP):
         self.to_drop = []  # Инициализация параметра класса to_drop
         self.model =  model
         self.SP=SP
@@ -39,10 +39,19 @@ class ML_model:
 
 
         print('QDA')
-        nsensor=12
+        nsensor=61
         data_points=self.SP.data_points
         points=nsensor*data_points
-        X=self.SP.df.iloc[:, :points]
+        
+        N = 50  # или любое другое число, которое ты хочешь
+
+        # Получаем N наиболее важных признаков по mutual information
+        top_features = self.StP.mi_importance.nlargest(N, 'importance')['feature'].values
+        
+        # Оставляем только эти признаки в X
+        X = self.SP.df[top_features]
+        
+        #X=self.SP.df.iloc[:, :points]
 
         #X = self.SP.df.drop(columns=['dataset'])  # Признаки
         y = self.SP.df['dataset']
@@ -218,16 +227,14 @@ if __name__=='__main__':
 
     #Pr.view(folder_pass_path,folder_fail_path)
     #Pr.eda(folder_pass_path, folder_fail_path)
-    Pr.fe(folder_pass_path, folder_fail_path) 
-# =============================================================================
-#     qda=ML_model(QuadraticDiscriminantAnalysis(reg_param=0.1),Pr.SP)    
-#     qda.QDAanalysis()
-#     qda.learn_curv()
-#     print("KNeighborsClassifier")
-# =============================================================================
+    Pr.af(folder_pass_path, folder_fail_path) 
+    qda=ML_model(QuadraticDiscriminantAnalysis(reg_param=0.1),Pr.SP)    
+    qda.QDAanalysis()
+    qda.learn_curv()
+    print("KNeighborsClassifier")
     knn=ML_model(KNeighborsClassifier(
-    n_neighbors=7,        # количество ближайших соседей
-    #metric='cosine',      # косинусная метрика — хорошо работает при такой высокой размерности
+    n_neighbors=1,        # количество ближайших соседей
+    metric='cosine',      # косинусная метрика — хорошо работает при такой высокой размерности
     weights='distance',   # ближние соседи важнее (меньше шумов)
     n_jobs=-1             # использовать все ядра процессора
            ),Pr.SP)    

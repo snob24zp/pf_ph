@@ -217,11 +217,50 @@ class Some_Processor:
         df_combined=df_combined[(df_combined.columns[:-2].tolist()
                              +[df_combined.columns[-1]]
                              +[df_combined.columns[-2]])]
+        
+        df_combined['batch'] = df_combined['fname'].str.extract(r'^([^_]+)')
+        counts = df_combined.groupby('batch').size()
+        print(counts.value_counts())
 
         print("df_combined",df_combined.columns )
         self.df=df_combined
         return df_combined
 
+    def avg_batch(self,df=None):
+        
+        if df is not None:
+            self.df=df.copy()
+            
+        original_columns = list(self.df.columns)
+        
+        # Сохраняем нужные колонки из первой строки каждой группы
+        extra_columns = (
+            self.df.groupby("batch")[["dataset", "fname"]]
+            .first()
+            .reset_index()
+        )
+        
+        # Среднее по числовым колонкам
+        df_avg = (
+            self.df.groupby("batch")
+              .mean(numeric_only=True)
+              .reset_index()
+        )
+        
+        # Объединяем средние значения и метаданные
+        df_avg = pd.merge(df_avg, extra_columns, on="batch", how="left")
+        
+        # Восстанавливаем порядок колонок
+        for col in ['dataset', 'fname', 'batch']:
+            if col in original_columns:
+                idx = original_columns.index(col)
+                if col in df_avg.columns:
+                    df_avg = df_avg.drop(columns=[col])
+                df_avg.insert(idx, col, extra_columns[col])
+        
+        self.df = df_avg
+        return self.df
+ 
     def avg_datatype(self,df=None):
         
         if df is not None:
@@ -243,6 +282,7 @@ class Some_Processor:
         cols.insert(dataset_index, "dataset")
         df_avg = df_avg[cols]
         df_avg['fname']=""
+        df_avg['batch']=""
         self.df=df_avg
         return self.df
     
@@ -264,11 +304,11 @@ class Some_Processor:
         
         for dataset_val in [0, 1]:
             
-            fnames = self.df.loc[self.df['dataset'] == dataset_val, 'fname'].values
+            fnames = self.df.loc[self.df['dataset'] == dataset_val, ['fname','batch']].values
 
             
             df_subset = (self.df[self.df['dataset'] 
-                                 == dataset_val].drop(columns=['dataset','fname'])
+                                 == dataset_val].drop(columns=['dataset','fname','batch'])
                         )
             arr = df_subset.to_numpy()
         
@@ -279,7 +319,8 @@ class Some_Processor:
                     for point_id, val in enumerate(chunk):
                         rows.append({
                             'dataset': dataset_val,
-                            'fname': fname,
+                            'fname': fname[0],
+                            'batch':fname[1],
                             'series_id': series_id,
                             'chunk_id': chunk_id,
                             'point_id': point_id,
@@ -307,7 +348,7 @@ class Some_Processor:
         wide_df = (
             self.df.sort_values(['dataset', 'series_id', 'abs_point_id'])
             .pivot_table(
-                index=['dataset', 'series_id', 'fname'],
+                index=['dataset', 'series_id', 'fname','batch'],
                 columns='abs_point_id',
                 values='value'
             )
@@ -318,7 +359,7 @@ class Some_Processor:
         wide_df.columns.name = None
     
         # Приводим abs_point_id к int и упорядочиваем колонки
-        fixed_columns = ['dataset', 'fname']
+        fixed_columns = ['dataset', 'fname','batch']
         point_columns = sorted([int(c) for c in wide_df.columns if isinstance(c, int)])
     
         wide_df = wide_df[point_columns+fixed_columns]
@@ -410,6 +451,7 @@ class Some_Processor:
         """
         Удаляет среднее значение по каждой колонке (признаку), 
         только в первых data_points * sensor_number столбцах.
+        то есть вычитаем типичную кривую
         """
         n = self.data_points * self.sensor_number  # сколько столбцов обрабатываем
     
@@ -434,7 +476,7 @@ class Some_Processor:
         if df is not None:
             self.df = df.copy()
     
-        group_keys = ['dataset','fname', 'series_id', 'chunk_id']
+        group_keys = ['dataset','fname','batch', 'series_id', 'chunk_id']
         value_key = 'value'
         point_key = 'point_id'
     
@@ -448,7 +490,7 @@ class Some_Processor:
         fft_rows = []
         #num_new_chunk = df_limited.groupby(group_keys).ngroups
         for keys, group in df_limited.groupby(group_keys):
-            dataset,fname, series_id, chunk_id = keys
+            dataset,fname, batch, series_id, chunk_id = keys
             signal = group.sort_values(point_key)[value_key].to_numpy()
         
             # Дополнить до чётной длины
@@ -466,6 +508,7 @@ class Some_Processor:
                 fft_rows.append({
                     'dataset': dataset,
                     'fname': fname,
+                    'batch':batch,
                     'series_id': series_id,
                     'chunk_id': curr_chunk,
                     'point_id': i,
@@ -478,6 +521,7 @@ class Some_Processor:
                 fft_rows.append({
                     'dataset': dataset,
                     'fname': fname,
+                    'batch':batch,
                     'series_id': series_id,
                     'chunk_id': curr_chunk,
                     'point_id': i+1,
@@ -492,6 +536,7 @@ class Some_Processor:
                 fft_rows.append({
                     'dataset': dataset,
                     'fname': fname,
+                    'batch':batch,
                     'series_id': series_id,
                     'chunk_id': curr_chunk,
                     'point_id': i+N_amp,
@@ -519,7 +564,7 @@ class Some_Processor:
         if df is not None:
             self.df = df.copy()
     
-        group_keys = ['dataset','fname', 'series_id', 'chunk_id']
+        group_keys = ['dataset','fname','batch', 'series_id', 'chunk_id']
         value_key = 'value'
         point_key = 'point_id'
     
@@ -533,7 +578,7 @@ class Some_Processor:
         antiderivative_rows = []
         #num_new_chunk = df_limited.groupby(group_keys).ngroups
         for keys, group in df_limited.groupby(group_keys):
-            dataset,fname, series_id, chunk_id = keys
+            dataset,fname,batch, series_id, chunk_id = keys
             signal = group.sort_values(point_key)[value_key].to_numpy()
         
             N = len(signal)
@@ -545,6 +590,7 @@ class Some_Processor:
                 antiderivative_rows.append({
                     'dataset': dataset,
                     'fname': fname,
+                    'batch':batch,
                     'series_id': series_id,
                     'chunk_id': curr_chunk,
                     'point_id': i,
@@ -568,7 +614,7 @@ class Some_Processor:
         if df is not None:
             self.df = df.copy()
     
-        group_keys = ['dataset','fname', 'series_id', 'chunk_id']
+        group_keys = ['dataset','fname','batch', 'series_id', 'chunk_id']
         value_key = 'value'
         point_key = 'point_id'
     
@@ -582,7 +628,7 @@ class Some_Processor:
         antiderivative_rows = []
         #num_new_chunk = df_limited.groupby(group_keys).ngroups
         for keys, group in df_limited.groupby(group_keys):
-            dataset,fname, series_id, chunk_id = keys
+            dataset,fname,batch, series_id, chunk_id = keys
             signal = group.sort_values(point_key)[value_key].to_numpy()
         
             N = len(signal)
@@ -598,6 +644,7 @@ class Some_Processor:
                 antiderivative_rows.append({
                     'dataset': dataset,
                     'fname': fname,
+                    'batch':batch,
                     'series_id': series_id,
                     'chunk_id': curr_chunk,
                     'point_id': i,
@@ -629,7 +676,7 @@ class Statistical_Processor:
         target_names = 'dataset'
         
         y = X['dataset']
-        X = X.drop(columns=['dataset','fname'])
+        X = X.drop(columns=['dataset','fname','batch'])
         feature_names = X.columns.astype(str)
         
         #print('x',X)
@@ -752,7 +799,7 @@ class Statistical_Processor:
         target_names = 'dataset'
         
         y = X['dataset']
-        X = X.drop(columns=['dataset','fname'])
+        X = X.drop(columns=['dataset','fname','batch'])
         
         # Стандартизация
         X_scaled = StandardScaler().fit_transform(X)
@@ -1288,6 +1335,7 @@ class ProccesingFFE:
         #self.DSh.Data_show(self.SP,"each_sensor_interpolation, fe")
         self.SP.half_sum_dif()
         self.SP.del_mean_across_rows()
+        #self.SP.avg_batch()
         #self.SP.avg_datatype()
         
         #self.SP.df.to_csv("half_sum_dif.csv", index=False)
