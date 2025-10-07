@@ -32,18 +32,18 @@ class ML_model:
         self.to_drop = []  # Инициализация параметра класса to_drop
         self.model =  model
         self.SP=SP
-
+        self.StP=StP
 
 
     def QDAanalysis(self):
 
 
         print('QDA')
-        nsensor=61
+        nsensor=24
         data_points=self.SP.data_points
         points=nsensor*data_points
         
-        N = 50  # или любое другое число, которое ты хочешь
+        N = 590  # или любое другое число, которое ты хочешь
 
         # Получаем N наиболее важных признаков по mutual information
         top_features = self.StP.mi_importance.nlargest(N, 'importance')['feature'].values
@@ -224,11 +224,13 @@ if __name__=='__main__':
     folder_fail_path = "./n2/n2"
     #folder_pass_path = "./Chicken Data Combined PASS/Chicken Data Combined PASS"
     #folder_fail_path = "./Chicken Data Combined FAIL/Chicken Data Combined FAIL"
+    folder_pass_path = "./Disease_No-Disease Samples 1/Disease_No-Disease Samples 1/NP"
+    folder_pass_path = "./Disease_No-Disease Samples 1/Disease_No-Disease Samples 1/P"
 
     #Pr.view(folder_pass_path,folder_fail_path)
     #Pr.eda(folder_pass_path, folder_fail_path)
     Pr.af(folder_pass_path, folder_fail_path) 
-    qda=ML_model(QuadraticDiscriminantAnalysis(reg_param=0.1),Pr.SP)    
+    qda=ML_model(QuadraticDiscriminantAnalysis(reg_param=0.1),Pr.SP,Pr.StP)    
     qda.QDAanalysis()
     qda.learn_curv()
     print("KNeighborsClassifier")
@@ -237,6 +239,6 @@ if __name__=='__main__':
     metric='cosine',      # косинусная метрика — хорошо работает при такой высокой размерности
     weights='distance',   # ближние соседи важнее (меньше шумов)
     n_jobs=-1             # использовать все ядра процессора
-           ),Pr.SP)    
+           ),Pr.SP,Pr.StP)    
     knn.QDAanalysis()
     knn.learn_curv()

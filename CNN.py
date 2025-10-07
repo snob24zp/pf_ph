@@ -386,6 +386,10 @@ if __name__ == "__main__":
     Pr = pfrf.ProccesingFFE()
     folder_pass_path = "./p2/p2"
     folder_fail_path = "./n2/n2"
+    folder_pass_path = "./Disease_No-Disease Samples 2/Disease_No-Disease Samples 2/NP"
+    folder_pass_path = "./Disease_No-Disease Samples 2/Disease_No-Disease Samples 2/P"
+    folder_pass_path = "./Disease_No-Disease Samples 1/Disease_No-Disease Samples 1/NP"
+    folder_pass_path = "./Disease_No-Disease Samples 1/Disease_No-Disease Samples 1/P"
     Pr.af(folder_pass_path, folder_fail_path)
 
     # ==== 2. Подготовка ====

@@ -27,6 +27,8 @@ from plotly.subplots import make_subplots
 
 import webbrowser
 
+seg_len_corr=0
+
 class DataFileFormatError(Exception):
     pass
 
@@ -421,7 +423,8 @@ class Some_Processor:
         def process_group(group):
             # Среднее по 8 минимальным point_id
             #print(group)
-            baseline = group.nsmallest(base_size, 'point_id')['value'].mean()
+            baseline = group.nsmallest(base_size,
+                                       'point_id').iloc[2:]['value'].mean()
             # Вычитание baseline из всей группы
             group['value'] = group['value'] - baseline
             return group
@@ -943,7 +946,7 @@ class Data_Show2:
         # Convert to number of data points
         segment_lengths = [(name, int(round(seconds * SP.param_dict['Acquired data point per second'])))
                            for name, seconds in periods]
-        segment_lengths[-1] = (segment_lengths[-1][0], segment_lengths[-1][1] + 1)
+        segment_lengths[-1] = (segment_lengths[-1][0], segment_lengths[-1][1]+seg_len_corr)
 
         # Calculate boundary positions
         boundaries = []
@@ -1250,6 +1253,7 @@ class ProccesingFFE:
         self.DSh=None
         self.SP=None
         self.SP12=None
+        self.StP=None
     def view(self,folder_pass_path,folder_fail_path):
         self.DR=DataRead()
         self.DSh=Data_Show2()
@@ -1259,9 +1263,9 @@ class ProccesingFFE:
         self.SP.get_params(self.DR)
         self.SP.combo_result(self.DR.df_p,self.DR.df_n)
         #self.SP.del_pause("Pause")
-        #self.DSh.Data_show(self.SP,"each_sensor")
+        self.DSh.Data_show(self.SP,"each_sensor")
         self.SP.avg_datatype()
-        #self.DSh.Data_show(self.SP,"avg_sensor")
+        self.DSh.Data_show(self.SP,"avg_sensor")
         self.SP12=copy.deepcopy(self.SP)
         self.SP.wide2chunk()
         self.DSh.Data_show_chunks(self.SP,"avg_sensor_separate")
@@ -1281,9 +1285,9 @@ class ProccesingFFE:
         self.SP.get_params(self.DR)
         self.SP.combo_result(self.DR.df_p,self.DR.df_n)
         #self.SP.del_pause("Pause")
-        #self.DSh.Data_show(self.SP,"each_sensor")
-        #self.SP.avg_datatype()
-        #self.DSh.Data_show(self.SP,"avg_sensor")
+        self.DSh.Data_show(self.SP,"each_sensor")
+        self.SP.avg_datatype()
+        self.DSh.Data_show(self.SP,"avg_sensor")
         #self.SP12=copy.deepcopy(self.SP)
         self.SP.half_sum_dif()
         self.DSh.Data_show(self.SP,"each_halfsumdif_sensor")
@@ -1303,11 +1307,11 @@ class ProccesingFFE:
         self.DR.read_result(folder_fail_path,'-')
         self.SP.get_params(self.DR)
         self.SP.combo_result(self.DR.df_p,self.DR.df_n)
-        self.StP.class_balance(self.SP)
-        #self.DSh.Data_show(self.SP,"each_sensor, fe")
+        self.StP.class_balance(self.SP)#print part of class 1
+        self.DSh.Data_show(self.SP,"each_sensor, fe")
         self.SP.del_peaks()
         #self.DSh.Data_show(self.SP,"each_sensor_interpolation, fe")
-        self.SP.half_sum_dif()
+        #self.SP.half_sum_dif()
         #self.SP.avg_datatype()
         
         self.SP.wide2chunk()
@@ -1355,7 +1359,29 @@ class ProccesingFFE:
         self.StP.mi_analize(self.SP)
         self.DSh.Data_show_st(self.SP,"each_halfsumdif_sensor",statistic=self.StP)
 
-
+    def fe2(self,folder_pass_path,folder_fail_path):      
+        self.DR=DataRead()
+        self.DSh=Data_Show2()
+        self.SP=Some_Processor()
+        self.StP=Statistical_Processor()
+        
+        self.DR.read_result(folder_pass_path,'+')
+        self.DR.read_result(folder_fail_path,'-')
+        self.SP.get_params(self.DR)
+        self.SP.combo_result(self.DR.df_p,self.DR.df_n)
+        self.StP.class_balance(self.SP)#print part of class 1
+        self.DSh.Data_show(self.SP,"each_sensor, fe")
+        self.SP.del_peaks()
+        #self.DSh.Data_show(self.SP,"each_sensor_interpolation, fe")
+        #self.SP.half_sum_dif()
+        #self.SP.avg_datatype()
+        
+        self.SP.wide2chunk()
+        self.SP.subtract_base_chunk()
+        #self.DSh.Data_show_chunks(self.SP,"sensor_separate_sub_base")
+        self.SP.chunk2wide()
+        
+        self.DSh.Data_show(self.SP,"each_sensor_wo_base")
         
 #Chicken Data Combined FAIL\Chicken Data Combined FAIL
 
@@ -1368,9 +1394,14 @@ if __name__=='__main__':
     #folder_fail_path = "./n3/n3"
     folder_pass_path = "./p2/p2"
     folder_fail_path = "./n2/n2"
+    folder_pass_path = "./Disease_No-Disease Samples 2/Disease_No-Disease Samples 2/NP"
+    folder_pass_path = "./Disease_No-Disease Samples 2/Disease_No-Disease Samples 2/P"
+    folder_pass_path = "./Disease_No-Disease Samples 1/Disease_No-Disease Samples 1/NP"
+    folder_pass_path = "./Disease_No-Disease Samples 1/Disease_No-Disease Samples 1/P"
+
 
     #Pr.view(folder_pass_path,folder_fail_path)
     #Pr.eda(folder_pass_path, folder_fail_path)
-    #Pr.fe(folder_pass_path, folder_fail_path)
-    Pr.af(folder_pass_path, folder_fail_path)
+    Pr.fe(folder_pass_path, folder_fail_path)
+    #Pr.af(folder_pass_path, folder_fail_path)
 
