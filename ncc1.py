@@ -8,11 +8,11 @@ from sklearn.neighbors import NearestCentroid
 import pf_read_file2 as pfrf
 
 class Model:
-    def init(self):
+    def __init__(self):
         self.model = NearestCentroid()
         self.Pr = pfrf.ProccesingFFE()
     def fit(self,pass_dir,not_pass_dir):
-        self.Pr.fe2(folder_pass_path, folder_fail_path)
+        self.Pr.fe2(pass_dir, not_pass_dir)
         df=self.Pr.SP.df
         X = df.iloc[:,0:self.Pr.SP.data_points*(self.Pr.SP.sensor_number-1)]
         y = df['dataset']
@@ -20,11 +20,11 @@ class Model:
         
     def classify_files(self,analysis_files_dir): 
             # Читаем данные из файлаfile_pa
-        self.Pr.read_result(analysis_files_dir)
+        self.Pr.DR.read_result(analysis_files_dir,'+')
 
             # Удаляем ненужные признаки
-        X = self.Pr.df.iloc[:,0:self.Pr.SP.data_points*(self.Pr.SP.sensor_number-1)]
-        files=self.Pr.df.iloc[:,-3]
+        X = self.Pr.DR.df_p.iloc[:,0:self.Pr.SP.data_points*(self.Pr.SP.sensor_number-1)]
+        files=self.Pr.DR.df_p["fname"]
 
             # Прогнозируем метку с помощью модели QDA
         predictions = self.model.predict(X)

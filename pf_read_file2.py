@@ -107,7 +107,8 @@ class DataRead:
                         key, value = [x.strip() for x in line.split('=', 1)]
             
                         # Преобразуем ключи к нужному формату и сохраняем значения
-                        pv=self.smart_cast(value)    
+                        pv=self.smart_cast(value) 
+                        key=key.lower()
                         if self.data is None:#признак что читается перввый файл
                             self.param_dict[key] = pv
                         elif self.param_dict[key]!=pv:
@@ -171,11 +172,11 @@ class Some_Processor:
         self.sensor_number=DR.data_headers_number-2
         self.param_dict=DR.param_dict.copy()
         self.periods = [
-        ("Baseline", self.param_dict['Baseline']),
-        ("Absorb", self.param_dict['Absorb']),
-        ("Pause", self.param_dict['Pause']),
-        ("Desorb", self.param_dict['Desorb']),
-        ("Flush", self.param_dict['Flush'])           
+        ("Baseline", self.param_dict['baseline']),
+        ("Absorb", self.param_dict['absorb']),
+        ("Pause", self.param_dict['pause']),
+        ("Desorb", self.param_dict['desorb']),
+        ("Flush", self.param_dict['flush'])           
         ]
         
 
@@ -417,8 +418,8 @@ class Some_Processor:
         
         #print(self.param_dict)
         
-        base_size=int(self.param_dict['Baseline']*
-                      self.param_dict['Acquired data point per second'])
+        base_size=int(self.param_dict['baseline']*
+                      self.param_dict['acquired data point per second'])
     
         def process_group(group):
             # Среднее по 8 минимальным point_id
@@ -944,7 +945,7 @@ class Data_Show2:
         periods = SP.periods
 
         # Convert to number of data points
-        segment_lengths = [(name, int(round(seconds * SP.param_dict['Acquired data point per second'])))
+        segment_lengths = [(name, int(round(seconds * SP.param_dict['acquired data point per second'])))
                            for name, seconds in periods]
         segment_lengths[-1] = (segment_lengths[-1][0], segment_lengths[-1][1]+seg_len_corr)
 
@@ -1396,7 +1397,7 @@ if __name__=='__main__':
     folder_fail_path = "./n2/n2"
     folder_pass_path = "./Disease_No-Disease Samples 2/Disease_No-Disease Samples 2/NP"
     folder_pass_path = "./Disease_No-Disease Samples 2/Disease_No-Disease Samples 2/P"
-    folder_pass_path = "./Disease_No-Disease Samples 1/Disease_No-Disease Samples 1/NP"
+    folder_fail_path = "./Disease_No-Disease Samples 1/Disease_No-Disease Samples 1/NP"
     folder_pass_path = "./Disease_No-Disease Samples 1/Disease_No-Disease Samples 1/P"
 
 

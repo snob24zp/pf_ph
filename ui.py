@@ -2,7 +2,8 @@ import pf_read_file
 import tkinter as tk
 from tkinter import filedialog
 
-import pf_read_file
+#import pf_read_file
+import ncc1 as ncc
 
 class ModelTrainerUI:
     def __init__(self, root):
@@ -50,8 +51,8 @@ class ModelTrainerUI:
     def train_model(self):
         print("Training the model...")
         self.model_var.set("Model Trained")
-        self.qda=pf_read_file.Qda()
-        self.qda.QDAanalysis(self.pass_files_dir,self.fail_files_dir)
+        self.qda=ncc.Model()
+        self.qda.fit(self.pass_files_dir,self.fail_files_dir)
     
     def save_model(self):
         print("Saving the model...")
