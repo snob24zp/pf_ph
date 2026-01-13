@@ -207,15 +207,19 @@ class Some_Processor:
     
     def combo_result(self,dfp,dfn):
         df_p1=dfp.copy()
-        df_n1=dfn.copy()
-
         df_p1["dataset"]=1
-        df_n1["dataset"]=0
+        
+        if dfn is not None:
+            df_n1=dfn.copy()
+            df_n1["dataset"]=0
 
-        #print(df_p)
-        #print(df_n)
-
-        df_combined = pd.concat([df_p1, df_n1])
+            #print(df_p)
+            #print(df_n)
+    
+            df_combined = pd.concat([df_p1, df_n1])
+        else:
+            df_combined= df_p1
+        
         
         df_combined=df_combined[(df_combined.columns[:-2].tolist()
                              +[df_combined.columns[-1]]
@@ -436,7 +440,7 @@ class Some_Processor:
     
     def del_peaks(self):
         
-        n = self.data_points*self.sensor_number  # количество первых столбцов, к которым применить
+        n = self.data_points*(self.sensor_number+1)  # количество первых столбцов, к которым применить
 
         # Разделим DataFrame на две части
         df_part_to_filter = self.df.iloc[:, :n]
@@ -1367,7 +1371,8 @@ class ProccesingFFE:
         self.StP=Statistical_Processor()
         
         self.DR.read_result(folder_pass_path,'+')
-        self.DR.read_result(folder_fail_path,'-')
+        if folder_fail_path:
+            self.DR.read_result(folder_fail_path,'-')
         self.SP.get_params(self.DR)
         self.SP.combo_result(self.DR.df_p,self.DR.df_n)
         self.StP.class_balance(self.SP)#print part of class 1

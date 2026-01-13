@@ -20,11 +20,13 @@ class Model:
         
     def classify_files(self,analysis_files_dir): 
             # Читаем данные из файлаfile_pa
-        self.Pr.DR.read_result(analysis_files_dir,'+')
+        #self.Pr.DR.read_result(analysis_files_dir,'+') 
+        self.Pr.fe2(analysis_files_dir, None)
 
             # Удаляем ненужные признаки
-        X = self.Pr.DR.df_p.iloc[:,0:self.Pr.SP.data_points*(self.Pr.SP.sensor_number-1)]
-        files=self.Pr.DR.df_p["fname"]
+        df=self.Pr.SP.df
+        X = df.iloc[:,0:self.Pr.SP.data_points*(self.Pr.SP.sensor_number-1)]
+        files=df["fname"]
 
             # Прогнозируем метку с помощью модели QDA
         predictions = self.model.predict(X)
